@@ -3,6 +3,7 @@ import functools
 import json
 import subprocess
 import os
+import tempfile
 from copy import copy
 from pathlib import Path
 from time import sleep
@@ -156,6 +157,7 @@ class CardanoCLIWrapper:
 
     def __init__(self, network_magic, state_dir, shelley_keys="shelley", byron_keys="byron", protocol="shelley"):
         self.network_magic = network_magic
+        self.is_mainnet = (network_magic == 0)
 
         self.state_dir = Path(state_dir).expanduser().absolute()
         self.shelley_genesis_json = self.state_dir / shelley_keys / "genesis.json"
@@ -208,6 +210,11 @@ class CardanoCLIWrapper:
     def prepend_flag(flag, contents):
         return sum(([flag, x] for x in contents), [])
 
+    def get_magic(self):
+        if self.is_mainnet:
+            return ["--mainnet"]
+        else:
+            return ["--testnet-magic", str(self.network_magic) ]
     def query_cli(self, cli_args):
         return self.cmd(
             [
@@ -215,8 +222,7 @@ class CardanoCLIWrapper:
                 "shelley",
                 "query",
                 *cli_args,
-                "--testnet-magic",
-                str(self.network_magic),
+                *self.get_magic()
             ]
         )
 
@@ -236,8 +242,7 @@ class CardanoCLIWrapper:
                 "shelley",
                 "transaction",
                 "calculate-min-fee",
-                "--testnet-magic",
-                str(self.network_magic),
+                *self.get_magic(),
                 "--protocol-params-file",
                 str(self.pparams_file),
                 "--tx-in-count",
@@ -264,6 +269,7 @@ class CardanoCLIWrapper:
         fee=0,
         ttl=None,
         proposal_file=None,
+        metadata=None
     ):
         if ttl == None:
             ttl = self.get_tip()["slotNo"] + 5000
@@ -277,7 +283,6 @@ class CardanoCLIWrapper:
         txin_args = self.prepend_flag("--tx-in", txins_combined)
         txout_args = self.prepend_flag("--tx-out", txouts_combined)
         cert_args = self.prepend_flag("--certificate-file", certificates)
-
         build_args = [
             "cardano-cli",
             "shelley",
@@ -297,7 +302,14 @@ class CardanoCLIWrapper:
         if proposal_file:
             build_args.extend(["--update-proposal-file", proposal_file])
 
+        if(metadata):
+            (tf, meta_data_file) = tempfile.mkstemp()
+            with open(meta_data_file, "w") as f:
+                f.write(json.dumps(metadata))
+            build_args.extend(["--metadata-json-file", meta_data_file])
+
         self.cmd(build_args)
+        os.unlink(meta_data_file)
 
     def sign_tx(self, tx_body_file="tx.body", out_file="tx.signed", signing_keys=None):
         signing_keys = signing_keys or []
@@ -312,8 +324,7 @@ class CardanoCLIWrapper:
                 str(tx_body_file),
                 "--out-file",
                 str(out_file),
-                "--testnet-magic",
-                str(self.network_magic),
+                *self.get_magic(),
                 *key_args,
             ]
         )
@@ -327,8 +338,7 @@ class CardanoCLIWrapper:
                 "shelley",
                 "transaction",
                 "submit",
-                "--testnet-magic",
-                str(self.network_magic),
+                *self.get_magic(),
                 "--tx-file",
                 str(tx_file),
             ]
@@ -349,8 +359,7 @@ class CardanoCLIWrapper:
                     "shelley",
                     "address",
                     "build",
-                    "--testnet-magic",
-                    str(self.network_magic),
+                    *self.get_magic(),
                     *cli_args,
                 ]
             )
@@ -366,8 +375,7 @@ class CardanoCLIWrapper:
                     "shelley",
                     "genesis",
                     "initial-addr",
-                    "--testnet-magic",
-                    str(self.network_magic),
+                    *self.get_magic(),
                     "--verification-key-file",
                     str(vkey_path),
                 ]
@@ -490,8 +498,7 @@ class CardanoCLIWrapper:
                   metadata_hash,
                   "--out-file",
                   f"{prefix}.cert",
-                  "--testnet-magic",
-                  str(self.network_magic)
+                    *self.get_magic(),
                 ])
 
     def create_metadata_file(self, name, file_name, description, ticker, homepage):
