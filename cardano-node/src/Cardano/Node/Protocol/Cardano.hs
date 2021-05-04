@@ -15,6 +15,7 @@ module Cardano.Node.Protocol.Cardano
 
 import           Prelude
 
+import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT)
 
@@ -27,6 +28,7 @@ import           Ouroboros.Consensus.HardFork.Combinator.Condense ()
 
 import           Ouroboros.Consensus.Cardano.Condense ()
 import qualified Ouroboros.Consensus.Mempool.TxLimits as TxLimits
+import           Ouroboros.Consensus.Shelley.Ledger.Stub
 
 import           Cardano.Api
 import           Cardano.Api.Orphans ()
@@ -77,7 +79,9 @@ mkSomeConsensusProtocolCardano NodeByronProtocolConfiguration {
                            }
                            NodeShelleyProtocolConfiguration {
                              npcShelleyGenesisFile,
-                             npcShelleyGenesisFileHash
+                             npcShelleyGenesisFileHash,
+                             npcStubComputeDuration,
+                             npcStubComputePrecision
                            }
                            NodeAlonzoProtocolConfiguration {
                              npcAlonzoGenesisFile,
@@ -100,6 +104,11 @@ mkSomeConsensusProtocolCardano NodeByronProtocolConfiguration {
                              npcTestAlonzoHardForkAtVersion
                            }
                            files = do
+    liftIO $
+      calibrateStubComputationArgForTime
+        npcStubComputeDuration
+        npcStubComputePrecision
+
     byronGenesis <-
       firstExceptT CardanoProtocolInstantiationErrorByron $
         Byron.readGenesis npcByronGenesisFile
