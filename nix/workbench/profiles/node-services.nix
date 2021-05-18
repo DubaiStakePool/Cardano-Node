@@ -107,6 +107,10 @@ let
               "cardano.node.resources" = [ "KatipBK" ];
             };
           };
+          TraceBlockFetchClient      = true;
+          TraceBlockFetchServer      = true;
+          TraceChainSyncHeaderServer = true;
+          TraceChainSyncClient       = true;
         };
       };
       era_setup_hardforks = {
