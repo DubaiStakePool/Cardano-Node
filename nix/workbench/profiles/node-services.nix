@@ -69,11 +69,11 @@ let
                ];
 
                TraceOptionBackend = [
-                 {ns = ""; backends = ["Stdout HumanFormat"; "Forwarder"; "EKGBackend"];}
+                 {ns = ""; backends = ["Stdout HumanFormat" "Forwarder" "EKGBackend"];}
                  {ns = "Cardano.Node.ChainDB"; backends = ["Forwarder"];}
                ];
 
-               TraceOptionForwarder = {host: "loopback"; port: 46};
+               TraceOptionForwarder = {host = "loopback"; port = 46;};
 
                TraceTxInbound       = true;
 
