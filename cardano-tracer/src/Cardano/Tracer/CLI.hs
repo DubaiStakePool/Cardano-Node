@@ -22,7 +22,7 @@ parseTracerParams =
     <$> parseFilePath
           "config"
           "file"
-          "Configuration file for tracer service"
+          "Configuration file for cardano-tracer service"
 
 -- Aux parsers
 

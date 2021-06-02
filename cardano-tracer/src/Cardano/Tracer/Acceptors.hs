@@ -4,7 +4,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE PackageImports #-}
 
 module Cardano.Tracer.Acceptors
   ( runAcceptors
@@ -17,7 +17,7 @@ import           Control.Concurrent.STM (atomically)
 import           Control.Concurrent.STM.TVar (TVar, modifyTVar', newTVarIO, readTVarIO)
 import           Control.Exception (SomeException, try)
 import           Control.Monad (void)
-import           Control.Tracer (nullTracer)
+import "contra-tracer" Control.Tracer (nullTracer)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.IORef (IORef, newIORef, readIORef)
 import           Data.HashMap.Strict ((!))
@@ -49,22 +49,20 @@ import           Ouroboros.Network.Protocol.Handshake.Unversioned (UnversionedPr
 import           Ouroboros.Network.Protocol.Handshake.Type (Handshake)
 import           Ouroboros.Network.Protocol.Handshake.Version (acceptableVersion,
                                                                simpleSingletonVersions)
-import           Ouroboros.Network.Util.ShowProxy (ShowProxy(..))
 import           System.IO.Unsafe (unsafePerformIO)
 
-import           Cardano.BM.Data.LogItem (LogObject)
+import           Cardano.Logging (TraceObject)
 
 import qualified Trace.Forward.Configuration as TF
 import qualified Trace.Forward.Protocol.Type as TF
-import           Trace.Forward.LogObject ()
-import           Trace.Forward.Network.Acceptor (acceptLogObjects)
+import           Trace.Forward.Network.Acceptor (acceptTraceObjects)
 
 import qualified System.Metrics.Configuration as EKGF
 import qualified System.Metrics.ReqResp as EKGF
 import           System.Metrics.Network.Acceptor (acceptEKGMetrics)
 
 import           Cardano.Tracer.Configuration
-import           Cardano.Tracer.Types (AcceptedItems, LogObjects, Metrics,
+import           Cardano.Tracer.Types (AcceptedItems, TraceObjects, Metrics,
                                        addressToNodeId, prepareAcceptedItems)
 
 runAcceptors
@@ -96,7 +94,7 @@ mkAcceptorsConfigs
   -> IORef Bool
   -> IORef Bool
   -> ( EKGF.AcceptorConfiguration
-     , TF.AcceptorConfiguration (LogObject Text)
+     , TF.AcceptorConfiguration TraceObject
      )
 mkAcceptorsConfigs TracerConfig{..} stopEKG stopTF = (ekgConfig, tfConfig)
  where
@@ -111,12 +109,12 @@ mkAcceptorsConfigs TracerConfig{..} stopEKG stopTF = (ekgConfig, tfConfig)
       , EKGF.actionOnDone      = putStrLn "EKGF: we are done!"
       }
 
-  tfConfig :: TF.AcceptorConfiguration (LogObject Text)
+  tfConfig :: TF.AcceptorConfiguration TraceObject
   tfConfig =
     TF.AcceptorConfiguration
       { TF.acceptorTracer    = nullTracer
       , TF.forwarderEndpoint = forTF acceptAt
-      , TF.whatToRequest     = TF.GetLogObjects loRequestNum
+      , TF.whatToRequest     = TF.GetTraceObjects loRequestNum
       , TF.actionOnReply     = print
       , TF.shouldWeStop      = stopTF
       , TF.actionOnDone      = putStrLn "TF: we are done!"
@@ -130,7 +128,7 @@ mkAcceptorsConfigs TracerConfig{..} stopEKG stopTF = (ekgConfig, tfConfig)
 
 runAcceptors'
   :: RemoteAddr
-  -> (EKGF.AcceptorConfiguration, TF.AcceptorConfiguration (LogObject Text))
+  -> (EKGF.AcceptorConfiguration, TF.AcceptorConfiguration TraceObject)
   -> TVar ThreadId
   -> AcceptedItems
   -> IO ()
@@ -151,7 +149,7 @@ doListenToForwarder
   => Snocket IO fd addr
   -> addr
   -> ProtocolTimeLimits (Handshake UnversionedProtocol Term)
-  -> (EKGF.AcceptorConfiguration, TF.AcceptorConfiguration (LogObject Text))
+  -> (EKGF.AcceptorConfiguration, TF.AcceptorConfiguration TraceObject)
   -> TVar ThreadId
   -> AcceptedItems
   -> IO ()
@@ -179,7 +177,7 @@ doListenToForwarder snocket
         UnversionedProtocolData
         (SomeResponderApplication $ acceptorApp
           [ (runEKGAcceptor        ekgConfig acceptedItems, 1)
-          , (runLogObjectsAcceptor tfConfig  acceptedItems, 2)
+          , (runTraceObjectsAcceptor tfConfig  acceptedItems, 2)
           ]
         )
       )
@@ -211,28 +209,25 @@ runEKGAcceptor ekgConfig acceptedItems connId = do
         unsafePerformIO $ prepareStores acceptedItems connId
   acceptEKGMetrics ekgConfig ekgStore localStore
 
-runLogObjectsAcceptor
+runTraceObjectsAcceptor
   :: Show addr
-  => TF.AcceptorConfiguration (LogObject Text)
+  => TF.AcceptorConfiguration TraceObject
   -> AcceptedItems
   -> ConnectionId addr
   -> RunMiniProtocol 'ResponderMode LBS.ByteString IO Void ()
-runLogObjectsAcceptor tfConfig acceptedItems connId = do
-  let (niStore, loQueue, _) =
+runTraceObjectsAcceptor tfConfig acceptedItems connId = do
+  let (niStore, trObQueue, _) =
         unsafePerformIO $ prepareStores acceptedItems connId
-  acceptLogObjects tfConfig loQueue niStore
+  acceptTraceObjects tfConfig trObQueue niStore
 
 prepareStores
   :: Show addr
   => AcceptedItems
   -> ConnectionId addr
-  -> IO (TF.NodeInfoStore, LogObjects, Metrics)
+  -> IO (TF.NodeInfoStore, TraceObjects, Metrics)
 prepareStores acceptedItems ConnectionId{..} = do
   -- Remote address of the node is unique identifier, from the tracer's point of view.
   let nodeId = addressToNodeId $ show remoteAddress
   prepareAcceptedItems nodeId acceptedItems
   items <- readIORef acceptedItems
   return $ items ! nodeId
-
--- We need it for 'TF.AcceptorConfiguration a' (in this example it is 'LogObject Text').
-instance ShowProxy (LogObject Text)

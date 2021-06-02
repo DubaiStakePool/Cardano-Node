@@ -57,7 +57,7 @@ runPrometheusServer (Endpoint host port) acceptedItems =
       []    -> writeText "There are no connected nodes yet."
       items -> blaze =<< liftIO (mkListOfHrefs items)
 
-  mkListOfHrefs :: [(NodeId, (NodeInfoStore, LogObjects, Metrics))] -> IO Html
+  mkListOfHrefs :: [(NodeId, (NodeInfoStore, TraceObjects, Metrics))] -> IO Html
   mkListOfHrefs items = do
     nodeHrefs <- forM items $ \(nodeId, (niStore, _, _)) -> do
       maybeName <- getNodeName niStore
