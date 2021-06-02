@@ -57,7 +57,7 @@ data LoggingParams = LoggingParams
 
 data TracerConfig = TracerConfig
   { acceptAt       :: !RemoteAddr
-  , loRequestNum   :: !Word16 -- ^ How many 'LogObject's in one request.
+  , loRequestNum   :: !Word16 -- ^ How many 'TraceObject's in one request.
   , ekgRequestFreq :: !Pico   -- ^ How often to request EKG-metrics.
   , hasEKG         :: !(Maybe Endpoint)
   , hasPrometheus  :: !(Maybe Endpoint)

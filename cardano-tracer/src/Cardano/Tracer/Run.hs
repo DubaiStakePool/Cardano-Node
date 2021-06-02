@@ -23,7 +23,7 @@ runCardanoTracerWithConfig :: TracerConfig -> IO ()
 runCardanoTracerWithConfig config = do
   acceptedItems <- initAcceptedItems
   -- Run two main threads:
-  -- 1. For all acceptors: they ask 'LogObject's and metrics from the node
+  -- 1. For all acceptors: they ask 'TraceObject's and metrics from the node
   --    and collect them in 'acceptedItems'.
   -- 2. For all handlers: they take items from 'acceptedItems' and do something
   --    with them (write to log files and return by web-request via EKG API).

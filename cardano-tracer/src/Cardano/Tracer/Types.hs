@@ -4,7 +4,7 @@
 
 module Cardano.Tracer.Types
   ( AcceptedItems
-  , LogObjects
+  , TraceObjects
   , Metrics
   , NodeId (..)
   , NodeName
@@ -25,7 +25,7 @@ import           Data.Word (Word16)
 import           GHC.Generics (Generic)
 import qualified System.Metrics as EKG
 
-import           Cardano.BM.Data.LogItem (LogObject)
+import           Cardano.Logging (TraceObject)
 
 import           Trace.Forward.Protocol.Type (NodeInfoStore)
 
@@ -53,14 +53,11 @@ addressToNodeId remoteAddress =
     [ip, port] -> NodeId (unpack ip) (read (unpack port) :: Word16)
     _          -> NodeId remoteAddress 0 -- Unexpected format of 'remoteAddress'!
 
--- We accept 'LogObject's parametrized by 'Text' only, because it is used in the node currently.
--- Anyway, it is a temporary solution, because current 'LogObject' will be replaced by
--- lightweight alternative.
-type LogObjects = TBQueue (LogObject Text)
+type TraceObjects = TBQueue TraceObject
 
-type Metrics    = (EKG.Store, IORef MetricsLocalStore)
+type Metrics = (EKG.Store, IORef MetricsLocalStore)
 
-type AcceptedItems = IORef (HashMap NodeId (NodeInfoStore, LogObjects, Metrics))
+type AcceptedItems = IORef (HashMap NodeId (NodeInfoStore, TraceObjects, Metrics))
 
 initAcceptedItems :: IO AcceptedItems
 initAcceptedItems = newIORef HM.empty
@@ -75,10 +72,10 @@ prepareAcceptedItems nodeId itemsIORef = do
   -- already worked with the tracer and now it's re-connect to the tracer.
   -- No need to re-create its stores.
   unless (nodeId `HM.member` items') $ do
-    niStore <- newIORef []
-    loQueue <- newTBQueueIO 2000
-    ekgStore <- EKG.newStore
+    niStore    <- newIORef []
+    trObQueue  <- newTBQueueIO 2000
+    ekgStore   <- EKG.newStore
     localStore <- newIORef emptyMetricsLocalStore
-    let storesForNewNode = (niStore, loQueue, (ekgStore, localStore))
+    let storesForNewNode = (niStore, trObQueue, (ekgStore, localStore))
     atomicModifyIORef' itemsIORef $ \items ->
       (HM.insert nodeId storesForNewNode items, ())

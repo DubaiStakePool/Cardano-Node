@@ -67,7 +67,6 @@ library
                        , ekg-forward
                        , filepath
                        , hashable
-                       , iohk-monitoring
                        , libsystemd-journal
                        , network
                        , optparse-applicative
@@ -80,6 +79,7 @@ library
                        , stm
                        , text
                        , time
+                       , trace-dispatcher
                        , trace-forward
                        , unordered-containers
 
