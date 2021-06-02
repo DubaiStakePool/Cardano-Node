@@ -70,6 +70,7 @@ standardTracer mbFilePath = do
        docIt (Stdout MachineFormat) (FormattedMachine "") (lk, Just c, msg)
     output _stateRef LoggingContext {} _ _a = pure ()
 
+-- TODO: care about reconfiguration
 initLogging :: IORef (StandardTracerState a) -> IO ()
 initLogging stateRef = do
   (inChan, outChan) <- newChan 2048
@@ -87,5 +88,5 @@ initLogging stateRef = do
     st {stRunning = Just (inChan, outChan, threadId)})
 
 -- | Converts a curried function to a function on a triple.
-uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
+uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f ~(a,b,c) = f a b c

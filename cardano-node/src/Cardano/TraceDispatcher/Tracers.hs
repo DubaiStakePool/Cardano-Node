@@ -112,9 +112,33 @@ mkStandardTracer ::
   -> (evt -> [Text])
   -> (evt -> SeverityS)
   -> Trace IO FormattedMessage
+  -> Trace IO FormattedMessage
+  -> Maybe (Trace IO FormattedMessage)
   -> IO (Trace IO evt)
-mkStandardTracer name namesFor severityFor trBase = do
-  tr <- humanFormatter True "Cardano" trBase
+mkStandardTracer name namesFor severityFor trStdout trForward mbTrEkg = do
+  tr1 <- humanFormatter True "Cardano" trStdout
+  tr2 <- forwardFormatter "Cardano" trForward
+  let trNs1 = appendName name $ appendName "Node" tr1
+  let trNs2 = appendName name $ appendName "Node" tr2
+  case mbTrEkg of
+    Nothing ->
+      pure $ withNamesAppended namesFor
+              $ withSeverity severityFor (trNs1 <> trNs2)
+    Just trEkg -> do
+      tr3 <- metricsFormatter "Cardano" trEkg
+      let trNs3 = appendName name $ appendName "Node" tr3
+      pure $ withNamesAppended namesFor
+              $ withSeverity severityFor (trNs1 <> trNs2 <> trNs3)
+
+mkStandardTracerSimple ::
+     LogFormatting evt
+  => Text
+  -> (evt -> [Text])
+  -> (evt -> SeverityS)
+  -> Trace IO FormattedMessage
+  -> IO (Trace IO evt)
+mkStandardTracerSimple name namesFor severityFor trStdout = do
+  tr <- humanFormatter True "Cardano" trStdout
   let trNs = appendName name $ appendName "Node" tr
   pure $ withNamesAppended namesFor
           $ withSeverity severityFor trNs
@@ -141,177 +165,177 @@ docTracers :: forall blk t.
   => Proxy blk -> IO ()
 docTracers _ = do
     trBase <- standardTracer Nothing
-    cdbmTr <- mkStandardTracer
+    cdbmTr <- mkStandardTracerSimple
                 "ChainDB"
                 namesForChainDBTraceEvents
                 severityChainDB
                 trBase
-    cscTr  <- mkStandardTracer
+    cscTr  <- mkStandardTracerSimple
                 "ChainSyncClient"
                 namesForChainSyncClientEvent
                 severityChainSyncClientEvent
                 trBase
-    csshTr <- mkStandardTracer
+    csshTr <- mkStandardTracerSimple
                 "ChainSyncServerHeader"
                 namesForChainSyncServerEvent
                 severityChainSyncServerEvent
                 trBase
-    cssbTr <- mkStandardTracer
+    cssbTr <- mkStandardTracerSimple
                 "ChainSyncServerBlock"
                 namesForChainSyncServerEvent
                 severityChainSyncServerEvent
                 trBase
-    bfdTr  <- mkStandardTracer
+    bfdTr  <- mkStandardTracerSimple
                 "BlockFetchDecision"
                 namesForBlockFetchDecision
                 severityBlockFetchDecision
                 trBase
-    bfcTr  <- mkStandardTracer
+    bfcTr  <- mkStandardTracerSimple
                 "BlockFetchClient"
                 namesForBlockFetchClient
                 severityBlockFetchClient
                 trBase
-    bfsTr  <- mkStandardTracer
+    bfsTr  <- mkStandardTracerSimple
                 "BlockFetchServer"
                 namesForBlockFetchServer
                 severityBlockFetchServer
                 trBase
-    fsiTr  <- mkStandardTracer
+    fsiTr  <- mkStandardTracerSimple
                 "ForgeStateInfo"
                 namesForStateInfo
                 severityStateInfo
                 trBase
-    txiTr  <- mkStandardTracer
+    txiTr  <- mkStandardTracerSimple
                 "TxInbound"
                 namesForTxInbound
                 severityTxInbound
                 trBase
-    txoTr  <- mkStandardTracer
+    txoTr  <- mkStandardTracerSimple
                 "TxOutbound"
                 namesForTxOutbound
                 severityTxOutbound
                 trBase
-    ltxsTr <- mkStandardTracer
+    ltxsTr <- mkStandardTracerSimple
                 "LocalTxSubmissionServer"
                 namesForLocalTxSubmissionServer
                 severityLocalTxSubmissionServer
                 trBase
-    mpTr   <- mkStandardTracer
+    mpTr   <- mkStandardTracerSimple
                 "Mempool"
                 namesForMempool
                 severityMempool
                 trBase
-    fTr    <- mkStandardTracer
+    fTr    <- mkStandardTracerSimple
                 "Forge"
                 namesForForge
                 severityForge
                 trBase
-    btTr   <- mkStandardTracer
+    btTr   <- mkStandardTracerSimple
                 "BlockchainTime"
                 namesForBlockchainTime
                 severityBlockchainTime
                 trBase
-    kacTr  <- mkStandardTracer
+    kacTr  <- mkStandardTracerSimple
                 "KeepAliveClient"
                 namesForKeepAliveClient
                 severityKeepAliveClient
                 trBase
-    tcsTr  <-  mkStandardTracer
+    tcsTr  <-  mkStandardTracerSimple
                 "TChainSync"
                 namesForTChainSync
                 severityTChainSync
                 trBase
-    ttsTr  <-  mkStandardTracer
+    ttsTr  <-  mkStandardTracerSimple
                 "TTxSubmission"
                 namesForTTxSubmission
                 severityTTxSubmission
                 trBase
-    tsqTr  <-  mkStandardTracer
+    tsqTr  <-  mkStandardTracerSimple
                 "TStateQuery"
                 namesForTStateQuery
                 severityTStateQuery
                 trBase
-    tcsnTr <-  mkStandardTracer
+    tcsnTr <-  mkStandardTracerSimple
                 "TChainSyncNode"
                 namesForTChainSyncNode
                 severityTChainSyncNode
                 trBase
-    tcssTr <-  mkStandardTracer
+    tcssTr <-  mkStandardTracerSimple
                 "TChainSyncSerialised"
                 namesForTChainSyncSerialised
                 severityTChainSyncSerialised
                 trBase
-    tbfTr  <-  mkStandardTracer
+    tbfTr  <-  mkStandardTracerSimple
                 "TBlockFetch"
                 namesForTBlockFetch
                 severityTBlockFetch
                 trBase
-    tbfsTr <-  mkStandardTracer
+    tbfsTr <-  mkStandardTracerSimple
                 "TBlockFetchSerialised"
                 namesForTBlockFetchSerialised
                 severityTBlockFetchSerialised
                 trBase
-    tsnTr  <-  mkStandardTracer
+    tsnTr  <-  mkStandardTracerSimple
                 "TxSubmission"
                 namesForTxSubmissionNode
                 severityTxSubmissionNode
                 trBase
-    ts2nTr  <-  mkStandardTracer
+    ts2nTr  <-  mkStandardTracerSimple
                 "TxSubmission2"
                 namesForTxSubmission2Node
                 severityTxSubmission2Node
                 trBase
-    ipsTr   <-  mkStandardTracer
+    ipsTr   <-  mkStandardTracerSimple
                 "IpSubscription"
                 namesForIPSubscription
                 severityIPSubscription
                 trBase
-    dnssTr  <-  mkStandardTracer
+    dnssTr  <-  mkStandardTracerSimple
                 "DnsSubscription"
                 namesForDNSSubscription
                 severityDNSSubscription
                 trBase
-    dnsrTr  <-  mkStandardTracer
+    dnsrTr  <-  mkStandardTracerSimple
                 "DNSResolver"
                 namesForDNSResolver
                 severityDNSResolver
                 trBase
-    errpTr  <-  mkStandardTracer
+    errpTr  <-  mkStandardTracerSimple
                 "ErrorPolicy"
                 namesForErrorPolicy
                 severityErrorPolicy
                 trBase
-    lerrpTr <-  mkStandardTracer
+    lerrpTr <-  mkStandardTracerSimple
                 "LocalErrorPolicy"
                 namesForLocalErrorPolicy
                 severityLocalErrorPolicy
                 trBase
-    apTr    <-  mkStandardTracer
+    apTr    <-  mkStandardTracerSimple
                 "AcceptPolicy"
                 namesForAcceptPolicy
                 severityAcceptPolicy
                 trBase
-    muxTr   <-  mkStandardTracer
+    muxTr   <-  mkStandardTracerSimple
                 "Mux"
                 namesForMux
                 severityMux
                 trBase
-    muxLTr   <-  mkStandardTracer
+    muxLTr   <-  mkStandardTracerSimple
                 "MuxLocal"
                 namesForMux
                 severityMux
                 trBase
-    hsTr   <-  mkStandardTracer
+    hsTr   <-  mkStandardTracerSimple
                 "Handshake"
                 namesForHandshake
                 severityHandshake
                 trBase
-    lhsTr  <-  mkStandardTracer
+    lhsTr  <-  mkStandardTracerSimple
                 "LocalHandshake"
                 namesForLocalHandshake
                 severityLocalHandshake
                 trBase
-    diTr   <-  mkStandardTracer
+    diTr   <-  mkStandardTracerSimple
                 "DiffusionInit"
                 namesForDiffusionInit
                 severityDiffusionInit
@@ -572,183 +596,187 @@ mkDispatchTracers
   -> NodeKernelData blk
   -> Maybe EKGDirect
   -> Trace IO FormattedMessage
+  -> Trace IO FormattedMessage
+  -> Maybe (Trace IO FormattedMessage)
+  -> TraceConfig
   -> IO (Tracers peer localPeer blk)
-mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect trBase = do
+mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
+  trBase trForward mbTrEKG _trConfig = do
     cdbmTr <- mkStandardTracer
                 "ChainDB"
                 namesForChainDBTraceEvents
                 severityChainDB
-                trBase
+                trBase trForward mbTrEKG
     cscTr  <- mkStandardTracer
                 "ChainSyncClient"
                 namesForChainSyncClientEvent
                 severityChainSyncClientEvent
-                trBase
+                trBase trForward mbTrEKG
     csshTr <- mkStandardTracer
                 "ChainSyncServerHeader"
                 namesForChainSyncServerEvent
                 severityChainSyncServerEvent
-                trBase
+                trBase trForward mbTrEKG
     cssbTr <- mkStandardTracer
                 "ChainSyncServerBlock"
                 namesForChainSyncServerEvent
                 severityChainSyncServerEvent
-                trBase
+                trBase trForward mbTrEKG
     bfdTr  <- mkStandardTracer
                 "BlockFetchDecision"
                 namesForBlockFetchDecision
                 severityBlockFetchDecision
-                trBase
+                trBase trForward mbTrEKG
     bfcTr  <- mkStandardTracer
                 "BlockFetchClient"
                 namesForBlockFetchClient
                 severityBlockFetchClient
-                trBase
+                trBase trForward mbTrEKG
     bfsTr  <- mkStandardTracer
                 "BlockFetchServer"
                 namesForBlockFetchServer
                 severityBlockFetchServer
-                trBase
+                trBase trForward mbTrEKG
     fsiTr  <- mkStandardTracer
                 "ForgeStateInfo"
                 namesForStateInfo
                 severityStateInfo
-                trBase
+                trBase trForward mbTrEKG
     txiTr  <- mkStandardTracer
                 "TxInbound"
                 namesForTxInbound
                 severityTxInbound
-                trBase
+                trBase trForward mbTrEKG
     txoTr  <- mkStandardTracer
                 "TxOutbound"
                 namesForTxOutbound
                 severityTxOutbound
-                trBase
+                trBase trForward mbTrEKG
     ltxsTr <- mkStandardTracer
                 "LocalTxSubmissionServer"
                 namesForLocalTxSubmissionServer
                 severityLocalTxSubmissionServer
-                trBase
+                trBase trForward mbTrEKG
     mpTr   <- mkStandardTracer
                 "Mempool"
                 namesForMempool
                 severityMempool
-                trBase
+                trBase trForward mbTrEKG
     fTr    <- mkStandardTracer
                 "Forge"
                 namesForForge
                 severityForge
-                trBase
+                trBase trForward mbTrEKG
     btTr   <- mkStandardTracer
                 "BlockchainTime"
                 namesForBlockchainTime
                 severityBlockchainTime
-                trBase
+                trBase trForward mbTrEKG
     kacTr  <- mkStandardTracer
                 "KeepAliveClient"
                 namesForKeepAliveClient
                 severityKeepAliveClient
-                trBase
+                trBase trForward mbTrEKG
     tcsTr  <-  mkStandardTracer
                 "ChainSyncClient"
                 namesForTChainSync
                 severityTChainSync
-                trBase
+                trBase trForward mbTrEKG
     ttsTr  <-  mkStandardTracer
                 "TxSubmissionClient"
                 namesForTTxSubmission
                 severityTTxSubmission
-                trBase
+                trBase trForward mbTrEKG
     tsqTr  <-  mkStandardTracer
                 "StateQueryClient"
                 namesForTStateQuery
                 severityTStateQuery
-                trBase
+                trBase trForward mbTrEKG
     tcsnTr <-  mkStandardTracer
                 "ChainSyncNode"
                 namesForTChainSyncNode
                 severityTChainSyncNode
-                trBase
+                trBase trForward mbTrEKG
     tcssTr <-  mkStandardTracer
                 "ChainSyncSerialised"
                 namesForTChainSyncSerialised
                 severityTChainSyncSerialised
-                trBase
+                trBase trForward mbTrEKG
     tbfTr  <-  mkStandardTracer
                 "BlockFetch"
                 namesForTBlockFetch
                 severityTBlockFetch
-                trBase
+                trBase trForward mbTrEKG
     tbfsTr <-  mkStandardTracer
                 "BlockFetchSerialised"
                 namesForTBlockFetchSerialised
                 severityTBlockFetchSerialised
-                trBase
+                trBase trForward mbTrEKG
     tsnTr  <-  mkStandardTracer
                 "TxSubmissionTracer"
                 namesForTxSubmissionNode
                 severityTxSubmissionNode
-                trBase
+                trBase trForward mbTrEKG
     ts2nTr  <-  mkStandardTracer
                 "TxSubmission2"
                 namesForTxSubmission2Node
                 severityTxSubmission2Node
-                trBase
+                trBase trForward mbTrEKG
     ipsTr   <-  mkStandardTracer
                 "IpSubscription"
                 namesForIPSubscription
                 severityIPSubscription
-                trBase
+                trBase trForward mbTrEKG
     dnssTr  <-  mkStandardTracer
                 "DnsSubscription"
                 namesForDNSSubscription
                 severityDNSSubscription
-                trBase
+                trBase trForward mbTrEKG
     dnsrTr  <-  mkStandardTracer
                 "DNSResolver"
                 namesForDNSResolver
                 severityDNSResolver
-                trBase
+                trBase trForward mbTrEKG
     errpTr  <-  mkStandardTracer
                 "ErrorPolicy"
                 namesForErrorPolicy
                 severityErrorPolicy
-                trBase
+                trBase trForward mbTrEKG
     lerrpTr <-  mkStandardTracer
                 "LocalErrorPolicy"
                 namesForLocalErrorPolicy
                 severityLocalErrorPolicy
-                trBase
+                trBase trForward mbTrEKG
     apTr    <-  mkStandardTracer
                 "AcceptPolicy"
                 namesForAcceptPolicy
                 severityAcceptPolicy
-                trBase
+                trBase trForward mbTrEKG
     muxTr   <-  mkStandardTracer
                 "Mux"
                 namesForMux
                 severityMux
-                trBase
+                trBase trForward mbTrEKG
     muxLTr   <-  mkStandardTracer
                 "MuxLocal"
                 namesForMux
                 severityMux
-                trBase
+                trBase trForward mbTrEKG
     hsTr   <-  mkStandardTracer
                 "Handshake"
                 namesForHandshake
                 severityHandshake
-                trBase
+                trBase trForward mbTrEKG
     lhsTr  <-  mkStandardTracer
                 "LocalHandshake"
                 namesForLocalHandshake
                 severityLocalHandshake
-                trBase
+                trBase trForward mbTrEKG
     diTr   <-  mkStandardTracer
                 "DiffusionInit"
                 namesForDiffusionInit
                 severityDiffusionInit
-                trBase
+                trBase trForward mbTrEKG
 
     configureTracers emptyTraceConfig docChainDBTraceEvent    [cdbmTr]
     configureTracers emptyTraceConfig docChainSyncClientEvent [cscTr]
@@ -830,5 +858,5 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
       , diffusionInitializationTracer = Tracer (traceWith diTr)
     }
 
-mkDispatchTracers blockConfig tOpts tr nodeKern ekgDirect _ =
+mkDispatchTracers blockConfig tOpts tr nodeKern ekgDirect _ _ _ _ =
   mkTracers blockConfig tOpts tr nodeKern ekgDirect

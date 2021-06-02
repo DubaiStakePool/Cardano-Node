@@ -49,7 +49,9 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Text (Text, pack)
 import           Data.Text.Lazy (toStrict)
+import           Data.Time (UTCTime)
 import           Data.Word (Word16)
+import           Network.HostName (HostName)
 import           GHC.Generics
 
 -- | The Trace carries the underlying tracer Tracer from the contra-tracer package.
@@ -184,9 +186,14 @@ instance AE.FromJSON SeverityF
 
 -- | Used for ForwarderTracer
 data TraceObject = TraceObject {
-    toContext :: LoggingContext
-  , toHuman   :: Maybe Text
-  , toMachine :: Maybe Text
+    toHuman     :: Maybe Text
+  , toMachine   :: Maybe Text
+  , toNamespace :: Namespace
+  , toSeverity  :: SeverityS
+  , toDetails   :: DetailLevel
+  , toTimestamp :: UTCTime
+  , toHostname  :: HostName
+  , toThreadId  :: Text
 } deriving (Eq, Show)
 
 data FormattedMessage =

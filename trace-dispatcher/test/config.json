@@ -1,7 +1,4 @@
 {
-    "ApplicationName": "cardano-sl"
-  , "ApplicationVersion": 0
-
   , "TraceOptionSeverity": [
     {ns: "", severity: "InfoF"}
   , {ns: "Cardano.Node.AcceptPolicy", severity: "SilenceF"}

@@ -1,15 +1,15 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 
-
-{-# LANGUAGE PartialTypeSignatures #-}
 module Cardano.Logging.Formatter (
     humanFormatter
   , metricsFormatter
   , machineFormatter
+  , forwardFormatter
 ) where
 
 import qualified Control.Tracer as T
@@ -51,6 +51,66 @@ metricsFormatter application (Trace tr) = do
                              , Just ctrl
                              , FormattedMetrics [])
 
+forwardFormatter
+  :: forall a m . (LogFormatting a, MonadIO m)
+  => Text
+  -> Trace m FormattedMessage
+  -> m (Trace m a)
+forwardFormatter application (Trace tr) = do
+  hn <- liftIO getHostName
+  let trr = mkTracer hn
+  pure $ Trace (T.arrow trr)
+ where
+    mkTracer hn = T.emit $
+      \ case
+        (lc, Nothing, v) -> do
+          thid <- liftIO myThreadId
+          time <- liftIO getCurrentTime
+          let fh = forHuman v
+              details = case lcDetails lc of
+                          Nothing  -> DRegular
+                          Just dtl -> dtl
+              fm = forMachine details v
+              nlc = lc { lcNamespace = application : lcNamespace lc}
+              to = TraceObject {
+                      toHuman     = if fh == "" then Nothing else Just fh
+                    , toMachine   = if fm == mempty then Nothing else
+                                    Just $ decodeUtf8 (BS.toStrict (AE.encode fm))
+                    , toNamespace = lcNamespace nlc
+                    , toSeverity  = case lcSeverity lc of
+                                      Nothing -> Info
+                                      Just s  -> s
+                    , toDetails   = case lcDetails lc of
+                                      Nothing -> DRegular
+                                      Just d  -> d
+                    , toTimestamp = time
+                    , toHostname  = hn
+                    , toThreadId  = (pack . show) thid
+                  }
+          T.traceWith tr ( nlc
+                         , Nothing
+                         , FormattedForwarder to)
+        (lc, Just ctrl, _v) -> do
+          thid <- liftIO myThreadId
+          time <- liftIO getCurrentTime
+          let nlc = lc { lcNamespace = application : lcNamespace lc}
+              to  = TraceObject {
+                      toHuman     = Nothing
+                    , toMachine   = Nothing
+                    , toNamespace = lcNamespace nlc
+                    , toSeverity  = case lcSeverity lc of
+                                      Nothing -> Info
+                                      Just s  -> s
+                    , toDetails   = case lcDetails lc of
+                                      Nothing -> DRegular
+                                      Just d  -> d
+                    , toTimestamp = time
+                    , toHostname  = hn
+                    , toThreadId  = (pack . show) thid
+                  }
+          T.traceWith tr ( nlc
+                         , Just ctrl
+                         , FormattedForwarder to)
 
 -- | Format this trace for human readability
 -- The boolean value tells, if this representation is for the console and should be colored

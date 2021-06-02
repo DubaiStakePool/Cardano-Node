@@ -198,7 +198,7 @@ doConnectToAcceptor snocket address timeLimits (ekgConfig, tfConfig) = do
     )
     Nothing
     address
-  pure tfQueue  
+  pure tfQueue
  where
   forwarderApp
     :: [(RunMiniProtocol 'InitiatorMode LBS.ByteString IO () Void, Word16)]
@@ -216,23 +216,3 @@ doConnectToAcceptor snocket address timeLimits (ekgConfig, tfConfig) = do
 -- | Converts a curried function to a function on a triple.
 uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 f ~(a,b,c) = f a b c
-
---
--- -- We need it for 'TF.ForwarderConfiguration lo' (in this example it is 'LogObject Text').
--- instance ShowProxy (LogObject Text)
---
--- loWriter :: TBQueue (LogObject Text) -> Maybe Pico -> IO ()
--- loWriter queue benchFillFreq = forever $ do
---   meta <- mkLOMeta Info Public
---   atomically $ writeTBQueue queue (lo meta)
---   threadDelay fillPause
---  where
---   lo :: LOMeta -> LogObject Text
---   lo meta = LogObject "demo.forwarder.LO.1" meta $ LogMessage "demo.forwarder.LogMessage.1"
---
---   fillPause = case benchFillFreq of
---                 Just ff -> toMicroSecs . secondsToNominalDiffTime $ ff
---                 Nothing -> 500000
---
---   toMicroSecs :: NominalDiffTime -> Int
---   toMicroSecs dt = fromEnum dt `div` 1000000
