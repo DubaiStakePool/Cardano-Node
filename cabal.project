@@ -99,7 +99,7 @@ package trace-dispatcher
   tests: False
 
 package cardano-tracer
-  tests: False
+  tests: True
 
 -- ---------------------------------------------------------
 

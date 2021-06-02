@@ -110,7 +110,6 @@ test-suite cardano-tracer-test
                        Cardano.Tracer.Test.Forwarder
                        Cardano.Tracer.Test.Logs.File
                        Cardano.Tracer.Test.Logs.Rotator
-                       Cardano.Tracer.Test.Logs.Rotator
 
   build-depends:         aeson
                        , async
@@ -123,7 +122,6 @@ test-suite cardano-tracer-test
                        , ekg-core
                        , ekg-forward
                        , filepath
-                       , iohk-monitoring
                        , io-sim
                        , io-sim-classes
                        , network
@@ -135,6 +133,7 @@ test-suite cardano-tracer-test
                        , tasty-quickcheck
                        , text
                        , time
+                       , trace-dispatcher
                        , trace-forward
                        , typed-protocols-examples
                        , unordered-containers

@@ -2,9 +2,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Tracer.Test.Forwarder
   ( launchForwardersSimple
@@ -17,11 +16,11 @@ import           Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, writeTBQ
 import           Control.Exception (SomeException, try)
 import           Control.Monad (forever)
 import           Control.Monad.STM (atomically)
-import           Control.Tracer (nullTracer)
+import "contra-tracer" Control.Tracer (nullTracer)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Fixed (Pico)
-import           Data.Text (Text, pack)
-import           Data.Time.Clock (NominalDiffTime, secondsToNominalDiffTime)
+import           Data.Text (pack)
+import           Data.Time.Clock (NominalDiffTime, getCurrentTime, secondsToNominalDiffTime)
 import           Data.Void (Void)
 import           Data.Word (Word16)
 import qualified Network.Socket as Socket
@@ -41,16 +40,12 @@ import           Ouroboros.Network.Protocol.Handshake.Type (Handshake)
 import           Ouroboros.Network.Protocol.Handshake.Version (acceptableVersion, simpleSingletonVersions)
 import           Ouroboros.Network.Snocket (Snocket, socketSnocket)
 import           Ouroboros.Network.Socket (connectToNode, nullNetworkConnectTracers)
-import           Ouroboros.Network.Util.ShowProxy (ShowProxy(..))
 import qualified System.Metrics as EKG
 
-import           Cardano.BM.Data.LogItem (LogObject (..), LOContent (..), LOMeta (..),
-                                          PrivacyAnnotation (..), mkLOMeta)
-import           Cardano.BM.Data.Severity (Severity (..))
+import           Cardano.Logging
 
 import qualified Trace.Forward.Configuration as TF
-import           Trace.Forward.LogObject ()
-import           Trace.Forward.Network.Forwarder (forwardLogObjects)
+import           Trace.Forward.Network.Forwarder (forwardTraceObjects)
 
 import qualified System.Metrics.Configuration as EKGF
 import           System.Metrics.Network.Forwarder (forwardEKGMetrics)
@@ -75,7 +70,7 @@ launchForwardersSimple (h, p) =
       , EKGF.actionOnRequest    = const (return ())
       }
 
-  tfConfig :: TF.ForwarderConfiguration (LogObject Text)
+  tfConfig :: TF.ForwarderConfiguration TraceObject
   tfConfig =
     TF.ForwarderConfiguration
       { TF.forwarderTracer  = nullTracer
@@ -87,7 +82,7 @@ launchForwardersSimple (h, p) =
 launchForwarders'
   :: Endpoint
   -> Maybe Pico
-  -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration (LogObject Text))
+  -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
   -> IO ()
 launchForwarders' (host, port) benchFillFreq configs = withIOManager $ \iocp -> do
   acceptorAddr:_ <- Socket.getAddrInfo Nothing (Just host) (Just $ show port)
@@ -100,11 +95,11 @@ doConnectToAcceptor
   -> addr
   -> ProtocolTimeLimits (Handshake UnversionedProtocol Term)
   -> Maybe Pico
-  -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration (LogObject Text))
+  -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
   -> IO ()
 doConnectToAcceptor snocket address timeLimits benchFillFreq (ekgConfig, tfConfig) = do
   tfQueue <- newTBQueueIO 1000000
-  _ <- async $ loWriter tfQueue benchFillFreq
+  _ <- async $ traceObjectsWriter tfQueue benchFillFreq
   store <- EKG.newStore
   EKG.registerGcMetrics store
 
@@ -119,7 +114,7 @@ doConnectToAcceptor snocket address timeLimits benchFillFreq (ekgConfig, tfConfi
        UnversionedProtocol
        UnversionedProtocolData $
          forwarderApp [ (forwardEKGMetrics ekgConfig store,  1)
-                      , (forwardLogObjects tfConfig tfQueue, 2)
+                      , (forwardTraceObjects tfConfig tfQueue, 2)
                       ]
     )
     Nothing
@@ -138,17 +133,22 @@ doConnectToAcceptor snocket address timeLimits benchFillFreq (ekgConfig, tfConfi
       | (prot, num) <- protocols
       ]
 
--- We need it for 'TF.ForwarderConfiguration lo' (in this example it is 'LogObject Text').
-instance ShowProxy (LogObject Text)
-
-loWriter :: TBQueue (LogObject Text) -> Maybe Pico -> IO ()
-loWriter queue benchFillFreq = forever $ do
-  meta <- mkLOMeta Info Public
-  atomically $ writeTBQueue queue (lo meta)
+traceObjectsWriter :: TBQueue TraceObject -> Maybe Pico -> IO ()
+traceObjectsWriter queue benchFillFreq = forever $ do
+  now <- getCurrentTime
+  atomically $ writeTBQueue queue (mkTraceObject now)
   threadDelay fillPause
  where
-  lo :: LOMeta -> LogObject Text
-  lo meta = LogObject "demo.forwarder.LO.1" meta $ LogMessage "demo.forwarder.LogMessage.1"
+  mkTraceObject now' = TraceObject
+    { toHuman     = Just "Human Message"
+    , toMachine   = Just "{\"msg\": \"forMachine\"}"
+    , toNamespace = ["demoNamespace"]
+    , toSeverity  = Info
+    , toDetails   = DRegular
+    , toTimestamp = now'
+    , toHostname  = "linux"
+    , toThreadId  = "1"
+    }
 
   fillPause = case benchFillFreq of
                 Just ff -> toMicroSecs . secondsToNominalDiffTime $ ff

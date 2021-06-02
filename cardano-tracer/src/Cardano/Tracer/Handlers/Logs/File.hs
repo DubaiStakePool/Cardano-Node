@@ -38,7 +38,7 @@ writeTraceObjectsToFile
   -> IO ()
 writeTraceObjectsToFile _ _ _ _ [] = return ()
 writeTraceObjectsToFile nodeId nodeName rootDir format traceObjects = do
-  createDirectoryIfMissing True rootDir  
+  createDirectoryIfMissing True rootDir
   createDirectoryIfMissing True subDirForLogs
   symLinkIsHere <- doesFileExist pathToCurrentLog
   unless symLinkIsHere $
@@ -82,7 +82,7 @@ traceObjectToText TraceObject{..} =
   case toHuman of
     Nothing -> Nothing
     Just msgForHuman -> Just $
-      "[" <> host <> name <> ":" <> sev <> ":" <> thId <> "] [" <> time <> "] " <>
+      "[" <> host <> ":" <> name <> ":" <> sev <> ":" <> thId <> "] [" <> time <> "] " <>
       TL.fromStrict msgForHuman
  where
   host = TL.pack toHostname
