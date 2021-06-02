@@ -13,7 +13,7 @@ import "contra-tracer" Control.Tracer (contramap, nullTracer, stdoutTracer)
 import           Data.Fixed (Pico)
 import           Data.Maybe (isJust)
 import           Data.Text (pack)
-import           Data.Time.Clock (NominalDiffTime, secondsToNominalDiffTime)
+import           Data.Time.Clock (NominalDiffTime, getCurrentTime, secondsToNominalDiffTime)
 import           Data.Void (Void)
 import           Data.Word (Word16)
 import           System.Environment (getArgs)
@@ -43,8 +43,7 @@ import           Ouroboros.Network.Snocket (Snocket, localAddressFromPath, local
 import           Ouroboros.Network.Socket (connectToNode, nullNetworkConnectTracers)
 import qualified System.Metrics as EKG
 
-import           Cardano.Logging (DetailLevel (..), LoggingContext (..),
-                                  Privacy (..), SeverityS (..), TraceObject (..))
+import           Cardano.Logging (DetailLevel (..), SeverityS (..), TraceObject (..))
 
 import qualified Trace.Forward.Configuration as TF
 import           Trace.Forward.Network.Forwarder (forwardTraceObjects)
@@ -213,19 +212,19 @@ doConnectToAcceptor snocket address timeLimits benchFillFreq (ekgConfig, tfConfi
 
 traceObjectsWriter :: TBQueue TraceObject -> Maybe Pico -> IO ()
 traceObjectsWriter queue benchFillFreq = forever $ do
-  atomically $ writeTBQueue queue traceObject
+  now <- getCurrentTime
+  atomically $ writeTBQueue queue (mkTraceObject now)
   threadDelay fillPause
  where
-  traceObject = TraceObject
-    { toContext = context
-    , toHuman   = Just "Human Message 1"
-    , toMachine = Nothing
-    }
-  context = LoggingContext
-    { lcNamespace = ["aNamespace"]
-    , lcSeverity  = Just Info
-    , lcPrivacy   = Just Public
-    , lcDetails   = Just DRegular
+  mkTraceObject now' = TraceObject
+    { toHuman     = Just "Human Message 1"
+    , toMachine   = Nothing
+    , toNamespace = ["demoNamespace"]
+    , toSeverity  = Info
+    , toDetails   = DRegular
+    , toTimestamp = now'
+    , toHostname  = "linux"
+    , toThreadId  = "1"
     }
 
   fillPause = case benchFillFreq of

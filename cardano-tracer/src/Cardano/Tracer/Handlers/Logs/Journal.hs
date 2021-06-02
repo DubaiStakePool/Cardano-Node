@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 
 #if defined(linux_HOST_OS)
 #define LINUX
@@ -12,10 +12,11 @@ module Cardano.Tracer.Handlers.Logs.Journal
 
 #if defined(LINUX)
 import qualified Data.HashMap.Strict as HM
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Data.Text.Encoding (encodeUtf8)
 import           Data.Time.Format (defaultTimeLocale, formatTime)
-import           Systemd.Journal (JournalFields, Priority (..), message, mkJournalField,
+import           Systemd.Journal (Priority (..), message, mkJournalField,
                                   priority, sendJournalFields, syslogIdentifier)
 
 import           Cardano.Logging (TraceObject (..))
@@ -40,39 +41,40 @@ writeTraceObjectsToJournal _ _ [] = return ()
 writeTraceObjectsToJournal nodeId nodeName traceObjects =
   mapM_ (sendJournalFields . mkJournalFields) traceObjects
  where
-  mkJournalFields (TraceObject _   Nothing            Nothing)              = HM.empty
-  mkJournalFields (TraceObject ctx (Just msgForHuman) Nothing)              = mkJournalFields' ctx msgForHuman
-  mkJournalFields (TraceObject ctx Nothing            (Just msgForMachine)) = mkJournalFields' ctx msgForMachine
-  mkJournalFields (TraceObject ctx (Just msgForHuman) (Just _))             = mkJournalFields' ctx msgForHuman
+  mkJournalFields trOb =
+    let msgForHuman   = fromMaybe "" $ L.toHuman trOb
+        msgForMachine = fromMaybe "" $ L.toMachine trOb
+    in if | not . T.null $ msgForHuman   -> mkJournalFields' trOb msgForHuman
+          | not . T.null $ msgForMachine -> mkJournalFields' trOb msgForMachine
+          | otherwise                    -> HM.empty -- Both messages are empty!  
 
-  mkJournalFields' ctx msg =
+  mkJournalFields' trOb msg =
        syslogIdentifier (nodeName <> T.pack (show nodeId))
     <> message msg
-    <> priority (mkPriority $ L.lcSeverity ctx)
-    <> HM.fromList [ (namespace, encodeUtf8 (mkName $ L.lcNamespace ctx))
-                   -- , (thread,    encodeUtf8 . T.pack . show . tid $ lometa)
-                   -- , (time,      encodeUtf8 . formatAsIso8601 . tstamp $ lometa)
+    <> priority (mkPriority $ L.toSeverity trOb)
+    <> HM.fromList [ (namespace, encodeUtf8 (mkName $ L.toNamespace trOb))
+                   , (thread,    encodeUtf8 $ L.toThreadId trOb)
+                   , (time,      encodeUtf8 . formatAsIso8601 $ L.toTimestamp trOb)
                    ]
 
   mkName [] = "noname"
   mkName names = T.intercalate "." names
 
   namespace = mkJournalField "namespace"
-  -- thread    = mkJournalField "thread"
-  -- time      = mkJournalField "time"
+  thread    = mkJournalField "thread"
+  time      = mkJournalField "time"
 
-  -- formatAsIso8601 = T.pack . formatTime defaultTimeLocale "%F %T%12QZ"
+  formatAsIso8601 = T.pack . formatTime defaultTimeLocale "%F %T%12QZ"
 
-mkPriority :: Maybe L.SeverityS -> Priority
-mkPriority Nothing            = Info
-mkPriority (Just L.Debug)     = Debug
-mkPriority (Just L.Info)      = Info
-mkPriority (Just L.Notice)    = Notice
-mkPriority (Just L.Warning)   = Warning
-mkPriority (Just L.Error)     = Error
-mkPriority (Just L.Critical)  = Critical
-mkPriority (Just L.Alert)     = Alert
-mkPriority (Just L.Emergency) = Emergency
+mkPriority :: L.SeverityS -> Priority
+mkPriority L.Debug     = Debug
+mkPriority L.Info      = Info
+mkPriority L.Notice    = Notice
+mkPriority L.Warning   = Warning
+mkPriority L.Error     = Error
+mkPriority L.Critical  = Critical
+mkPriority L.Alert     = Alert
+mkPriority L.Emergency = Emergency
 #else
 writeTraceObjectsToJournal
   :: NodeId

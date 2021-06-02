@@ -9,9 +9,10 @@ module Cardano.Tracer.Handlers.Logs.File
   ) where
 
 import           Control.Monad (unless)
-import           Data.Aeson (ToJSON, Value (..), (.=), object, toJSON)
+import           Data.Aeson (ToJSON, (.=), object, toJSON)
 import           Data.Aeson.Text (encodeToLazyText)
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Char (isDigit)
 import           Data.Maybe (mapMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -77,16 +78,18 @@ writeTraceObjectsToFile nodeId nodeName rootDir format traceObjects = do
 #endif
 
 traceObjectToText :: TraceObject -> Maybe TL.Text
-traceObjectToText (TraceObject _   Nothing            _) = Nothing
-traceObjectToText (TraceObject ctx (Just msgForHuman) _) = Just $
-  "[" <> host <> name <> ":" <> sev <> ":" <> thId <> "] [" <> time <> "] " <> msg
+traceObjectToText TraceObject{..} =
+  case toHuman of
+    Nothing -> Nothing
+    Just msgForHuman -> Just $
+      "[" <> host <> name <> ":" <> sev <> ":" <> thId <> "] [" <> time <> "] " <>
+      TL.fromStrict msgForHuman
  where
-  host = ""
-  name = mkName $ lcNamespace ctx
-  sev = TL.pack . show $ lcSeverity ctx
-  thId = ""
-  time = ""
-  msg = TL.fromStrict msgForHuman
+  host = TL.pack toHostname
+  name = mkName toNamespace
+  sev  = TL.pack $ show toSeverity
+  thId = TL.fromStrict $ T.filter isDigit toThreadId
+  time = TL.pack $ formatTime defaultTimeLocale "%F %T%2Q %Z" toTimestamp
 
 mkName :: Namespace -> TL.Text
 mkName [] = "noname"
@@ -112,13 +115,15 @@ instance ToJSON TraceObjectForJSON where
            ]
 
 traceObjectToJSON :: TraceObject -> Maybe TL.Text
-traceObjectToJSON (TraceObject _   _ Nothing) = Nothing
-traceObjectToJSON (TraceObject ctx _ (Just msgForMachine)) = Just . encodeToLazyText $
-  TraceObjectForJSON
-    { jAt   = undefined --tstamp lometa
-    , jNS   = mkName $ lcNamespace ctx
-    , jData = msgForMachine
-    , jHost = undefined --hostname lometa
-    , jSev  = T.pack . show $ lcSeverity ctx
-    , jTId  = undefined --T.filter isDigit (T.pack . show . tid $ lometa)
-    }
+traceObjectToJSON TraceObject{..} =
+  case toMachine of
+    Nothing -> Nothing
+    Just msgForMachine -> Just . encodeToLazyText $
+      TraceObjectForJSON
+        { jAt   = toTimestamp
+        , jNS   = mkName toNamespace
+        , jData = msgForMachine
+        , jHost = T.pack toHostname
+        , jSev  = T.pack $ show toSeverity
+        , jTId  = T.filter isDigit toThreadId
+        }

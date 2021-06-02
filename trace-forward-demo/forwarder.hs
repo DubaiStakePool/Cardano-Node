@@ -10,11 +10,11 @@ import           Control.Monad (forever)
 import           Control.Monad.STM (atomically)
 import "contra-tracer" Control.Tracer (contramap, stdoutTracer)
 import           Data.Text (pack)
+import           Data.Time.Clock (getCurrentTime)
 import           System.Environment (getArgs)
 import           System.Exit (die)
 
-import           Cardano.Logging (DetailLevel (..), LoggingContext (..),
-                                  Privacy (..), SeverityS (..), TraceObject (..))
+import           Cardano.Logging (DetailLevel (..), SeverityS (..), TraceObject (..))
 
 import           Trace.Forward.Forwarder (runTraceForwarder)
 import           Trace.Forward.Configuration (ForwarderConfiguration (..),
@@ -49,18 +49,18 @@ main = do
   runTraceForwarder config queue
 
 traceObjectsWriter :: TBQueue TraceObject -> IO ()
-traceObjectsWriter queue = forever $ do 
-  atomically $ writeTBQueue queue traceObject
+traceObjectsWriter queue = forever $ do
+  now <- getCurrentTime
+  atomically $ writeTBQueue queue (mkTraceObject now)
   threadDelay 500000
  where
-  traceObject = TraceObject
-    { toContext = context
-    , toHuman   = Just "Human Message 1"
-    , toMachine = Nothing
-    }
-  context = LoggingContext
-    { lcNamespace = ["aNamespace"]
-    , lcSeverity  = Just Info
-    , lcPrivacy   = Just Public
-    , lcDetails   = Just DRegular
+  mkTraceObject now' = TraceObject
+    { toHuman     = Just "Human Message 1"
+    , toMachine   = Nothing
+    , toNamespace = ["demoNamespace"]
+    , toSeverity  = Info
+    , toDetails   = DRegular
+    , toTimestamp = now'
+    , toHostname  = "linux"
+    , toThreadId  = "1"
     }
