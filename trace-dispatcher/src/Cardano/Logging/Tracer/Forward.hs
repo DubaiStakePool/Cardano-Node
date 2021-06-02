@@ -16,6 +16,7 @@ module Cardano.Logging.Tracer.Forward
 
 import           Codec.CBOR.Term (Term)
 import           Codec.Serialise (Serialise (..))
+import           Control.Concurrent (forkIO)
 import           Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO,
                      writeTBQueue)
 import           Control.Exception (SomeException, try)
@@ -24,8 +25,8 @@ import           Control.Monad.STM (atomically)
 import           GHC.Generics (Generic)
 
 -- Temporary solution, to avoid conflicts with trace-dispatcher.
-import "contra-tracer" Control.Tracer (contramap, stdoutTracer)
 import qualified Control.Tracer as T
+import           "contra-tracer" Control.Tracer (contramap, stdoutTracer)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.IORef
 import           Data.Text (unpack)
@@ -64,6 +65,7 @@ import           Trace.Forward.Network.Forwarder (forwardTraceObjects)
 import           Cardano.Logging.DocuGenerator
 import           Cardano.Logging.Types
 
+
 -- Instances for 'TraceObject' to forward it using 'trace-forward' library.
 
 deriving instance Generic Privacy
@@ -89,7 +91,8 @@ forwardTracer :: forall m. (MonadIO m)
   => TraceConfig
   -> m (Trace m FormattedMessage)
 forwardTracer config = do
-    tbQueue <- liftIO $ launchForwardersSimple (tcForwarder config)
+    tbQueue <- liftIO $ newTBQueueIO 1000000
+    liftIO $ launchForwardersSimple (tcForwarder config) tbQueue
     stateRef <- liftIO $ newIORef (ForwardTracerState tbQueue)
     pure $ Trace $ T.arrow $ T.emit $ uncurry3 (output stateRef)
   where
@@ -114,9 +117,9 @@ forwardTracer config = do
         Nothing -> pure ()
     output _stateRef LoggingContext {} _ _a = pure ()
 
-launchForwardersSimple :: RemoteAddr -> IO (TBQueue TraceObject)
-launchForwardersSimple endpoint =
-  launchForwarders endpoint (ekgConfig, tfConfig)
+launchForwardersSimple :: RemoteAddr -> TBQueue TraceObject -> IO ()
+launchForwardersSimple endpoint tbQueue =
+  launchForwarders endpoint (ekgConfig, tfConfig) tbQueue
  where
   ekgConfig :: EKGF.ForwarderConfiguration
   ekgConfig =
@@ -147,38 +150,41 @@ launchForwardersSimple endpoint =
 launchForwarders
   :: RemoteAddr
   -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
-  -> IO (TBQueue TraceObject)
-launchForwarders endpoint configs =
-  try (launchForwarders' endpoint configs) >>= \case
+  -> TBQueue TraceObject
+  -> IO ()
+launchForwarders endpoint configs tbQueue =
+  try (forkIO $  launchForwarders' endpoint configs tbQueue) >>= \case
   -- TODO: Can't we get in an infinite loop here?
-    Left (_e :: SomeException) ->
-      launchForwarders endpoint configs
-    Right res -> return res
+    Left (err :: SomeException) ->
+      error $ "Error in launchForwarders: " <> show err
+--      launchForwarders endpoint configs
+    Right _ -> pure ()
 
 launchForwarders'
   :: RemoteAddr
   -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
-  -> IO (TBQueue TraceObject)
-launchForwarders' endpoint configs = withIOManager $ \iocp -> do
+  -> TBQueue TraceObject
+  -> IO ()
+launchForwarders' endpoint configs tbQueue = withIOManager $ \iocp -> do
   case endpoint of
     LocalPipe localPipe -> do
       let snocket = localSnocket iocp localPipe
           address = localAddressFromPath localPipe
-      doConnectToAcceptor snocket address noTimeLimitsHandshake configs
+      doConnectToAcceptor snocket address noTimeLimitsHandshake configs tbQueue
     RemoteSocket host port -> do
       acceptorAddr:_ <- Socket.getAddrInfo Nothing (Just (unpack host)) (Just (show port))
       let snocket = socketSnocket iocp
           address = Socket.addrAddress acceptorAddr
-      doConnectToAcceptor snocket address timeLimitsHandshake configs
+      doConnectToAcceptor snocket address timeLimitsHandshake configs tbQueue
 
 doConnectToAcceptor
   :: Snocket IO fd addr
   -> addr
   -> ProtocolTimeLimits (Handshake UnversionedProtocol Term)
   -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
-  -> IO (TBQueue TraceObject)
-doConnectToAcceptor snocket address timeLimits (ekgConfig, tfConfig) = do
-  tfQueue <- newTBQueueIO 1000000
+  -> TBQueue TraceObject
+  -> IO ()
+doConnectToAcceptor snocket address timeLimits (ekgConfig, tfConfig) tbQueue = do
   store <- EKG.newStore
   EKG.registerGcMetrics store
 
@@ -193,12 +199,12 @@ doConnectToAcceptor snocket address timeLimits (ekgConfig, tfConfig) = do
        UnversionedProtocol
        UnversionedProtocolData $
          forwarderApp [ (forwardEKGMetrics ekgConfig store,  1)
-                      , (forwardTraceObjects tfConfig tfQueue, 2)
+                      , (forwardTraceObjects tfConfig tbQueue, 2)
                       ]
     )
     Nothing
     address
-  pure tfQueue
+  pure ()
  where
   forwarderApp
     :: [(RunMiniProtocol 'InitiatorMode LBS.ByteString IO () Void, Word16)]
