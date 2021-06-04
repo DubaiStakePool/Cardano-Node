@@ -3,15 +3,12 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Cardano.Tracer.Test.Logs.File
   ( tests
   ) where
 
 import           Control.Concurrent (forkIO, killThread, threadDelay)
 import           Control.Monad (filterM)
-import           Data.List (sort)
 import           Data.Word (Word16)
 import           Test.Tasty
 import           Test.Tasty.QuickCheck
@@ -72,7 +69,9 @@ propFile format rootDir host port = ioProperty $ do
                         [symLink] -> do
                           -- ... to the latest *.log-file.
                           maybeLatestLog <- getSymbolicLinkTarget symLink
-                          let latestLog = last $ sort logsWeNeed
+                          -- The logs' names contain timestamps, so the
+                          -- latest log is the maximum one.
+                          let latestLog = maximum logsWeNeed
                           return $ latestLog === maybeLatestLog
                         _ -> false "there is more than one symlink"
         _ -> false "root dir contains more than one subdir"

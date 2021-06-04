@@ -46,7 +46,7 @@ writeTraceObjectsToJournal nodeId nodeName traceObjects =
         msgForMachine = fromMaybe "" $ L.toMachine trOb
     in if | not . T.null $ msgForHuman   -> mkJournalFields' trOb msgForHuman
           | not . T.null $ msgForMachine -> mkJournalFields' trOb msgForMachine
-          | otherwise                    -> HM.empty -- Both messages are empty!  
+          | otherwise                    -> HM.empty -- Both messages are empty!
 
   mkJournalFields' trOb msg =
        syslogIdentifier (nodeName <> T.pack (show nodeId))

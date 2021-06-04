@@ -1,13 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Tracer.Handlers.Metrics.Prometheus
   ( runPrometheusServer
   ) where
 
 import           Prelude hiding (head)
-import           Control.Monad (forM)
+import           Control.Monad (forM, forever)
 import           Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
@@ -37,7 +37,10 @@ runPrometheusServer
   :: Endpoint
   -> AcceptedItems
   -> IO ()
-runPrometheusServer (Endpoint host port) acceptedItems =
+runPrometheusServer (Endpoint host port) acceptedItems = forever $
+  -- If everything is okay, the function 'simpleHttpServe' never returns.
+  -- But if there is some problem, it never throws an exception, but just stops.
+  -- So if it stopped - it will be re-started.
   simpleHttpServe config $
     route [ ("metrics", renderListOfNodes)
           , ("metrics/:nodefullid", renderMetricsFromNode)
@@ -106,7 +109,7 @@ getMetricsFromNode (nodeFullId':_) acceptedItems = do
           sampleAll ekgStore >>= return . renderListOfMetrics . getListOfMetrics
  where
   -- For example, "127.0.0.1-17890" is suffix of "node-1-127.0.0.1-17890"
-  nodeIdWeNeed nodeId = (T.pack $ show nodeId) `T.isSuffixOf` nodeFullId
+  nodeIdWeNeed nodeId = T.pack (show nodeId) `T.isSuffixOf` nodeFullId
   nodeFullId = decodeUtf8 nodeFullId'
 
   getListOfMetrics :: Sample -> MetricsList
@@ -125,7 +128,7 @@ getMetricsFromNode (nodeFullId':_) acceptedItems = do
     map (\(mName, mValue) -> prepareName mName <> " " <> mValue) mList
 
   prepareName =
-      T.filter (flip elem (['0'..'9'] ++ ['a'..'z'] ++ ['A'..'Z'] ++ ['_']))
+      T.filter (`elem` (['0'..'9'] ++ ['a'..'z'] ++ ['A'..'Z'] ++ ['_']))
     . T.replace " " "_"
     . T.replace "-" "_"
     . T.replace "." "_"

@@ -71,7 +71,6 @@ library
                        , network
                        , optparse-applicative
                        , ouroboros-network-framework
-                       , safe-exceptions
                        , serialise
                        , snap-blaze
                        , snap-core

@@ -7,7 +7,7 @@ module Cardano.Tracer.Handlers.Logs.Run
   ( runLogsHandler
   ) where
 
-import           Control.Exception.Safe (IOException, withException)
+import           Control.Exception (SomeException, try)
 import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async (async, forConcurrently_,
                                            uninterruptibleCancel)
@@ -64,8 +64,10 @@ writeTraceObjects
   -> IO ()
 writeTraceObjects _ _ _ [] = return ()
 writeTraceObjects config nodeId nodeName logObjects =
-  withException (writeTraceObjects' config nodeId nodeName logObjects) $ \(e :: IOException) ->
-    hPutStrLn stderr $ "Cannot write trace objects to log files: " <> show e
+  try (writeTraceObjects' config nodeId nodeName logObjects) >>= \case
+    Left (e :: SomeException) ->
+      hPutStrLn stderr $ "writeTraceObjects error: " <> show e
+    Right _ -> return ()
 
 writeTraceObjects'
   :: TracerConfig

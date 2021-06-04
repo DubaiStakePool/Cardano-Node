@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -14,5 +13,5 @@ import           Test.Tasty.QuickCheck
 
 tests :: TestTree
 tests = localOption (QuickCheckTests 1) $ testGroup "Test.Logs.Rotator"
-  [ 
+  [
   ]

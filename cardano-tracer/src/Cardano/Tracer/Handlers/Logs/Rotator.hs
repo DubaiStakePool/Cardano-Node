@@ -7,7 +7,7 @@ module Cardano.Tracer.Handlers.Logs.Rotator
   ( runLogsRotator
   ) where
 
-import           Control.Exception.Safe (IOException, withException)
+import           Control.Exception (SomeException, try)
 import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async (forConcurrently_)
 import           Control.Monad (filterM, forM_, forever, when)
@@ -40,8 +40,10 @@ launchRotator
   -> IO ()
 launchRotator _ [] = return ()
 launchRotator rotParams rootDirsWithFormats = forever $ do
-  withException (forM_ rootDirsWithFormats $ checkRootDir rotParams) $ \(e :: IOException) ->
-    hPutStrLn stderr $ "Problem with rotation of log files: " <> show e
+  try (forM_ rootDirsWithFormats $ checkRootDir rotParams) >>= \case
+    Left (e :: SomeException) ->
+      hPutStrLn stderr $ "Problem with rotation of log files: " <> show e
+    Right _ -> return ()
   threadDelay 10000000
 
 checkRootDir
