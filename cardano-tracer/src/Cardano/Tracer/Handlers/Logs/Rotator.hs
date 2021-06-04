@@ -7,16 +7,14 @@ module Cardano.Tracer.Handlers.Logs.Rotator
   ( runLogsRotator
   ) where
 
-import           Control.Exception.Safe (Exception (..), catchIO)
+import           Control.Exception.Safe (IOException, withException)
 import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async (forConcurrently_)
 import           Control.Monad (filterM, forM_, forever, when)
 import           Data.List (find, nub, sort)
 import           Data.Time (diffUTCTime, getCurrentTime)
 import           Data.Word (Word64)
-import           System.Directory (doesDirectoryExist, getFileSize,
-                                   getSymbolicLinkTarget, createFileLink,
-                                   listDirectory, removeFile)
+import           System.Directory
 import           System.FilePath ((</>), takeDirectory, takeFileName)
 import           System.IO (hPutStrLn, stderr)
 
@@ -33,7 +31,7 @@ runLogsRotator TracerConfig{..} =
   fileParamsOnly   LoggingParams{..} = logMode == FileMode
   getRootAndFormat LoggingParams{..} = (logRoot, logFormat)
 
--- | All the logs with 'LogObject's received from particular node
+-- | All the logs with 'TraceObject's received from particular node
 -- will be stored in a separate directory, so they can be checked
 -- concurrently.
 launchRotator
@@ -42,7 +40,8 @@ launchRotator
   -> IO ()
 launchRotator _ [] = return ()
 launchRotator rotParams rootDirsWithFormats = forever $ do
-  forM_ rootDirsWithFormats $ checkRootDir rotParams
+  withException (forM_ rootDirsWithFormats $ checkRootDir rotParams) $ \(e :: IOException) ->
+    hPutStrLn stderr $ "Problem with rotation of log files: " <> show e
   threadDelay 10000000
 
 checkRootDir
@@ -50,44 +49,47 @@ checkRootDir
   -> (FilePath, LogFormat)
   -> IO ()
 checkRootDir rotParams (rootDir, format) =
-  catchIO checkLogsInRootDir' $ \e ->
-    hPutStrLn stderr $ "Cannot write log items to file: " <> displayException e
- where
-  checkLogsInRootDir' =
-    listDirectory rootDir >>= \case
+  doesDirectoryExist rootDir >>= \case
+    True -> listDirectory rootDir >>= \case
       [] ->
         -- There are no nodes' subdirs yet (or they were deleted),
         -- so no rotation can be performed.
         return ()
       maybeSubDirs -> do
         let fullPathsToSubDirs = map (rootDir </>) maybeSubDirs
-        -- All the logs received from particular node will be stored in a subdir.
+        -- All the logs received from particular node will be stored in corresponding subdir.
         filterM doesDirectoryExist fullPathsToSubDirs >>= \case
           [] ->
             -- There are no subdirs with logs here, so no rotation can be performed.
             return ()
           subDirs ->
+            -- Ok, list of subdirs is here, check each of them in parallel.
             forConcurrently_ subDirs $ checkLogsFromNode rotParams format
+    False ->
+      -- There is no root dir yet (probably it was deleted or wasn't created at all),
+      -- so no rotation can be performed.
+      return ()
 
 checkLogsFromNode
   :: RotationParams
   -> LogFormat
   -> FilePath
   -> IO ()
-checkLogsFromNode rotParams format subDirForLogs =
+checkLogsFromNode RotationParams{..} format subDirForLogs =
   listDirectory subDirForLogs >>= \case
     [] ->
       -- There are no logs in this subdir (probably they were deleted),
       -- so no rotation can be performed.
       return ()
     [oneFile] ->
-      -- At least two files must be there: one log and symlink.
+      -- At least two files must be there: one log and one symlink.
       -- So if there is only one file, it's a weird situation,
       -- (probably invalid symlink only), we have to try to fix it.
       fixLog (subDirForLogs </> oneFile) format
     logs -> do
       let fullPathsToLogs = map (subDirForLogs </>) logs
-      checkLogs rotParams format fullPathsToLogs
+      checkIfCurrentLogIsFull fullPathsToLogs format rpLogLimitBytes
+      checkIfThereAreOldLogs  fullPathsToLogs format rpMaxAgeHours rpKeepFilesNum
 
 fixLog
   :: FilePath
@@ -96,22 +98,15 @@ fixLog
 fixLog oneFile format =
   isItSymLink format oneFile >>= \case
     True -> do
-      -- It is a single symlink, but corresponding log was deleted.
+      -- It is a symlink, but corresponding log was deleted,
+      -- whch means that symlink is already invalid.
       removeFile oneFile
       createLogAndSymLink (takeDirectory oneFile) format
     False ->
       when (isItLog format oneFile) $
         -- It is a single log, but its symlink was deleted.
-        createFileLink oneFile $ symLinkName format
-
-checkLogs
-  :: RotationParams
-  -> LogFormat
-  -> [FilePath]
-  -> IO ()
-checkLogs RotationParams{..} format logs = do
-  checkIfCurrentLogIsFull logs format rpLogLimitBytes
-  checkIfThereAreOldLogs logs format rpMaxAgeHours rpKeepFilesNum
+        withCurrentDirectory (takeDirectory oneFile) $
+          createFileLink (takeFileName oneFile) (symLinkName format)
 
 checkIfCurrentLogIsFull
   :: [FilePath]
@@ -124,14 +119,15 @@ checkIfCurrentLogIsFull logs format maxSizeInBytes =
     Just symLink ->
       doesSymLinkValid symLink >>= \case
         True -> do
-          itIsFull <- isItFull =<< getPathToLatestLog symLink
-          when itIsFull $ createLogAndUpdateSymLink subDirForLogs format
-        False -> do
+          itIsFull <- isLogFull =<< getPathToLatestLog symLink
+          when itIsFull $
+            createLogAndUpdateSymLink subDirForLogs format
+        False ->
           -- Remove invalid symlink.
           removeFile symLink
     Nothing ->
       -- There is no symlink we need, so skip check for now:
-      -- this symlink will be created when the new 'LogObject's will be received.
+      -- this symlink will be created when the new 'TraceObject's will be received.
       return ()
  where
   subDirForLogs = takeDirectory $ head logs -- All these logs are in the same subdir.
@@ -140,7 +136,7 @@ checkIfCurrentLogIsFull logs format maxSizeInBytes =
     logName <- getSymbolicLinkTarget symlink
     return $ subDirForLogs </> logName
 
-  isItFull logName = do
+  isLogFull logName = do
     sz <- getFileSize logName
     return $ fromIntegral sz >= maxSizeInBytes
 

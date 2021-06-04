@@ -73,7 +73,7 @@ let
                  {ns = "Cardano.Node.ChainDB"; backends = ["Forwarder"];}
                ];
 
-               TraceOptionForwarder = {filePath = "./forwarder.trace";};
+               TraceOptionForwarder = {host = "127.0.0.1"; port = 3010;};
 
                TraceTxInbound       = true;
 
