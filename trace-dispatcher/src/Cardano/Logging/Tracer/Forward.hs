@@ -20,6 +20,7 @@ import           Control.Concurrent (forkIO)
 import           Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO,
                      writeTBQueue)
 import           Control.Exception (SomeException, try)
+import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.STM (atomically)
 import           GHC.Generics (Generic)
@@ -92,7 +93,9 @@ forwardTracer :: forall m. (MonadIO m)
   -> m (Trace m FormattedMessage)
 forwardTracer config = do
     tbQueue <- liftIO $ newTBQueueIO 1000000
-    liftIO $ launchForwardersSimple (tcForwarder config) tbQueue
+    store <- liftIO $ EKG.newStore
+    liftIO $ EKG.registerGcMetrics store
+    liftIO $ launchForwardersSimple (tcForwarder config) tbQueue store
     stateRef <- liftIO $ newIORef (ForwardTracerState tbQueue)
     pure $ Trace $ T.arrow $ T.emit $ uncurry3 (output stateRef)
   where
@@ -117,10 +120,18 @@ forwardTracer config = do
         Nothing -> pure ()
     output _stateRef LoggingContext {} _ _a = pure ()
 
-launchForwardersSimple :: RemoteAddr -> TBQueue TraceObject -> IO ()
-launchForwardersSimple endpoint tbQueue =
-  launchForwarders endpoint (ekgConfig, tfConfig) tbQueue
+launchForwardersSimple :: RemoteAddr -> TBQueue TraceObject -> EKG.Store -> IO ()
+launchForwardersSimple endpoint tbQueue store =
+  void . forkIO $ launchForwardersSimple'
  where
+  launchForwardersSimple' =
+    try (launchForwarders' endpoint (ekgConfig, tfConfig) tbQueue store) >>= \case
+      Left (_e :: SomeException) ->
+        -- There is some problem with the connection with the acceptor, try it again.
+        launchForwardersSimple'
+      Right _ ->
+        pure () -- Actually, the function 'connectToNode' never returns.
+
   ekgConfig :: EKGF.ForwarderConfiguration
   ekgConfig =
     EKGF.ForwarderConfiguration
@@ -147,35 +158,23 @@ launchForwardersSimple endpoint tbQueue =
   forEKGF (LocalPipe p)      = EKGF.LocalPipe p
   forEKGF (RemoteSocket h p) = EKGF.RemoteSocket h p
 
-launchForwarders
-  :: RemoteAddr
-  -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
-  -> TBQueue TraceObject
-  -> IO ()
-launchForwarders endpoint configs tbQueue =
-  try (forkIO $  launchForwarders' endpoint configs tbQueue) >>= \case
-  -- TODO: Can't we get in an infinite loop here?
-    Left (err :: SomeException) ->
-      error $ "Error in launchForwarders: " <> show err
---      launchForwarders endpoint configs
-    Right _ -> pure ()
-
 launchForwarders'
   :: RemoteAddr
   -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
   -> TBQueue TraceObject
+  -> EKG.Store
   -> IO ()
-launchForwarders' endpoint configs tbQueue = withIOManager $ \iocp -> do
+launchForwarders' endpoint configs tbQueue store = withIOManager $ \iocp -> do
   case endpoint of
     LocalPipe localPipe -> do
       let snocket = localSnocket iocp localPipe
           address = localAddressFromPath localPipe
-      doConnectToAcceptor snocket address noTimeLimitsHandshake configs tbQueue
+      doConnectToAcceptor snocket address noTimeLimitsHandshake configs tbQueue store
     RemoteSocket host port -> do
       acceptorAddr:_ <- Socket.getAddrInfo Nothing (Just (unpack host)) (Just (show port))
       let snocket = socketSnocket iocp
           address = Socket.addrAddress acceptorAddr
-      doConnectToAcceptor snocket address timeLimitsHandshake configs tbQueue
+      doConnectToAcceptor snocket address timeLimitsHandshake configs tbQueue store
 
 doConnectToAcceptor
   :: Snocket IO fd addr
@@ -183,11 +182,12 @@ doConnectToAcceptor
   -> ProtocolTimeLimits (Handshake UnversionedProtocol Term)
   -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
   -> TBQueue TraceObject
+  -> EKG.Store
   -> IO ()
-doConnectToAcceptor snocket address timeLimits (ekgConfig, tfConfig) tbQueue = do
-  store <- EKG.newStore
-  EKG.registerGcMetrics store
-
+doConnectToAcceptor snocket address timeLimits (ekgConfig, tfConfig) tbQueue store = do
+  -- If there is a network problem (unable to establish the connection
+  -- with the acceptor or the connection was broken), thrown exception
+  -- will be catched and this function will be re-called.
   connectToNode
     snocket
     unversionedHandshakeCodec
@@ -198,13 +198,12 @@ doConnectToAcceptor snocket address timeLimits (ekgConfig, tfConfig) tbQueue = d
     (simpleSingletonVersions
        UnversionedProtocol
        UnversionedProtocolData $
-         forwarderApp [ (forwardEKGMetrics ekgConfig store,  1)
+         forwarderApp [ (forwardEKGMetrics ekgConfig store,    1)
                       , (forwardTraceObjects tfConfig tbQueue, 2)
                       ]
     )
     Nothing
     address
-  pure ()
  where
   forwarderApp
     :: [(RunMiniProtocol 'InitiatorMode LBS.ByteString IO () Void, Word16)]

@@ -45,7 +45,7 @@ propFile format rootDir host port = ioProperty $ do
   threadDelay 500000
   forwarderThr <- forkIO $ launchForwardersSimple (host, port)
   -- Wait for some 'LogObject's...
-  threadDelay 4000000
+  threadDelay 5000000
   -- Stop both sides.
   killThread forwarderThr
   killThread tracerThr

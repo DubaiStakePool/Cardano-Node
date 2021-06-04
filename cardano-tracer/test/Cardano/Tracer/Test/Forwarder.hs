@@ -58,7 +58,7 @@ launchForwardersSimple :: Endpoint -> IO ()
 launchForwardersSimple (h, p) =
   try (launchForwarders' (h, p) Nothing (ekgConfig, tfConfig)) >>= \case
     Left (_e :: SomeException) ->
-      launchForwarders' (h, p) Nothing (ekgConfig, tfConfig)
+      launchForwardersSimple (h, p)
     Right _ -> return ()
  where
   ekgConfig :: EKGF.ForwarderConfiguration
