@@ -13,6 +13,7 @@ import           Data.Word (Word16)
 import           Test.Tasty
 import           Test.Tasty.QuickCheck
 import           System.Directory
+import           System.FilePath
 
 import           Cardano.Tracer.Configuration
 import           Cardano.Tracer.Handlers.Logs.Log (isItLog, isItSymLink)
@@ -22,10 +23,8 @@ import           Cardano.Tracer.Test.Forwarder (launchForwardersSimple)
 
 tests :: TestTree
 tests = localOption (QuickCheckTests 1) $ testGroup "Test.Logs.File"
-  [ testProperty ".log" $
-      propFile AsText "/tmp/test-logs-text" "127.0.0.1" 3000
-  , testProperty ".json" $
-      propFile AsJSON "/tmp/test-logs-json" "127.0.0.1" 3010
+  [ testProperty ".log"  $ propFile AsText "text" "127.0.0.1" 3000
+  , testProperty ".json" $ propFile AsJSON "json" "127.0.0.1" 3010
   ]
 
 propFile
@@ -34,14 +33,16 @@ propFile
   -> String
   -> Word16
   -> Property
-propFile format rootDir host port = ioProperty $ do
+propFile format suffix host port = ioProperty $ do
+  tmpDir <- getTemporaryDirectory
+  let rootDir = tmpDir </> ("test-logs-" <> suffix)
   -- Remove rootDir if needed.
   removePathForcibly rootDir
   -- Run cardano-tracer and demo-forwarder-mux.
-  tracerThr <- forkIO $ runCardanoTracerWithConfig config
+  tracerThr <- forkIO $ runCardanoTracerWithConfig (config rootDir)
   threadDelay 500000
   forwarderThr <- forkIO $ launchForwardersSimple (host, port)
-  -- Wait for some 'LogObject's...
+  -- Wait for some 'TraceObject's...
   threadDelay 5000000
   -- Stop both sides.
   killThread forwarderThr
@@ -77,13 +78,13 @@ propFile format rootDir host port = ioProperty $ do
         _ -> false "root dir contains more than one subdir"
     False -> false "root dir doesn't exist"
  where
-  config = TracerConfig
+  config rootDir' = TracerConfig
     { acceptAt       = RemoteSocket host (fromIntegral port)
     , loRequestNum   = 1
     , ekgRequestFreq = 1.0
     , hasEKG         = Nothing
     , hasPrometheus  = Nothing
-    , logging        = [LoggingParams rootDir FileMode format]
+    , logging        = [LoggingParams rootDir' FileMode format]
     , rotation       = Nothing
     }
 
