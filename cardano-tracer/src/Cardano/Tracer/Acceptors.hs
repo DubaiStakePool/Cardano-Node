@@ -21,7 +21,7 @@ import "contra-tracer" Control.Tracer (nullTracer)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.IORef (IORef, newIORef, readIORef)
 import           Data.HashMap.Strict ((!))
-import           Data.Text (Text, pack)
+import           Data.Text (pack)
 import           Data.Time.Clock (secondsToNominalDiffTime)
 import           Data.Void (Void)
 import qualified Network.Socket as Socket

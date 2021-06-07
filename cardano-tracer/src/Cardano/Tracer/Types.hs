@@ -44,14 +44,16 @@ data NodeId = NodeId
   } deriving (Eq, Generic, Hashable, Ord)
 
 instance Show NodeId where
+  show (NodeId pipe 0)  = pipe
   show (NodeId ip port) = ip <> "-" <> show port
 
 addressToNodeId :: String -> NodeId
 addressToNodeId remoteAddress =
-  -- We assume that 'remoteAddress' is a String-representation of the normal address (IP:port).
+  -- The string 'remoteAddress' can contain the normal address (IP:port)
+  -- or the path to local pipe file.
   case splitOn ":" . pack $ remoteAddress of
     [ip, port] -> NodeId (unpack ip) (read (unpack port) :: Word16)
-    _          -> NodeId remoteAddress 0 -- Unexpected format of 'remoteAddress'!
+    _          -> NodeId "LocalPipe" 0
 
 type TraceObjects = TBQueue TraceObject
 
