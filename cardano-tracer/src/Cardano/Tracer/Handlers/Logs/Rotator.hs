@@ -10,11 +10,13 @@ module Cardano.Tracer.Handlers.Logs.Rotator
 import           Control.Exception (SomeException, try)
 import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async (forConcurrently_)
-import           Control.Monad (filterM, forM_, forever, when)
+import           Control.Monad (forM_, forever, when)
+import           Control.Monad.Extra (whenM)
 import           Data.List (find, nub, sort)
 import           Data.Time (diffUTCTime, getCurrentTime)
 import           Data.Word (Word64)
 import           System.Directory
+import           System.Directory.Extra (listDirectories, listFiles)
 import           System.FilePath ((</>), takeDirectory, takeFileName)
 import           System.IO (hPutStrLn, stderr)
 
@@ -51,26 +53,17 @@ checkRootDir
   -> (FilePath, LogFormat)
   -> IO ()
 checkRootDir rotParams (rootDir, format) =
-  doesDirectoryExist rootDir >>= \case
-    True -> listDirectory rootDir >>= \case
+  whenM (doesDirectoryExist rootDir) $
+    -- All the logs received from particular node will be stored in corresponding subdir.
+    listDirectories rootDir >>= \case
       [] ->
         -- There are no nodes' subdirs yet (or they were deleted),
         -- so no rotation can be performed.
         return ()
-      maybeSubDirs -> do
-        let fullPathsToSubDirs = map (rootDir </>) maybeSubDirs
-        -- All the logs received from particular node will be stored in corresponding subdir.
-        filterM doesDirectoryExist fullPathsToSubDirs >>= \case
-          [] ->
-            -- There are no subdirs with logs here, so no rotation can be performed.
-            return ()
-          subDirs ->
-            -- Ok, list of subdirs is here, check each of them in parallel.
-            forConcurrently_ subDirs $ checkLogsFromNode rotParams format
-    False ->
-      -- There is no root dir yet (probably it was deleted or wasn't created at all),
-      -- so no rotation can be performed.
-      return ()
+      subDirs -> do
+        let fullPathsToSubDirs = map (rootDir </>) subDirs  
+        -- Ok, list of subdirs is here, check each of them in parallel.
+        forConcurrently_ fullPathsToSubDirs $ checkLogsFromNode rotParams format
 
 checkLogsFromNode
   :: RotationParams
@@ -78,7 +71,7 @@ checkLogsFromNode
   -> FilePath
   -> IO ()
 checkLogsFromNode RotationParams{..} format subDirForLogs =
-  listDirectory subDirForLogs >>= \case
+  listFiles subDirForLogs >>= \case
     [] ->
       -- There are no logs in this subdir (probably they were deleted),
       -- so no rotation can be performed.
@@ -120,9 +113,8 @@ checkIfCurrentLogIsFull logs format maxSizeInBytes =
   case find (\logPath -> takeFileName logPath == symLinkName format) logs of
     Just symLink ->
       doesSymLinkValid symLink >>= \case
-        True -> do
-          itIsFull <- isLogFull =<< getPathToLatestLog symLink
-          when itIsFull $
+        True ->
+          whenM (isLogFull =<< getPathToLatestLog symLink) $
             createLogAndUpdateSymLink subDirForLogs format
         False ->
           -- Remove invalid symlink.

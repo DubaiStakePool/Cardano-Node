@@ -65,6 +65,7 @@ library
                        , ekg
                        , ekg-core
                        , ekg-forward
+                       , extra
                        , filepath
                        , hashable
                        , libsystemd-journal

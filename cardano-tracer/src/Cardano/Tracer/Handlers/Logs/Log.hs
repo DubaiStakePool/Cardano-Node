@@ -12,6 +12,7 @@ module Cardano.Tracer.Handlers.Logs.Log
   , symLinkName
   ) where
 
+import           Control.Monad.Extra (whenM)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Maybe (isJust)
 import           Data.Time (UTCTime, getCurrentTime)
@@ -76,6 +77,7 @@ createLogAndUpdateSymLink subDirForLogs format = withCurrentDirectory subDirForL
   newLog <- createLog format
   let tmpSymLink  = symLinkNameTmp format
       realSymLink = symLinkName format
+  whenM (doesFileExist tmpSymLink) $ removeFile tmpSymLink
   createFileLink newLog tmpSymLink
   renamePath tmpSymLink realSymLink -- Atomic operation, uses POSIX.rename.
 

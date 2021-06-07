@@ -8,7 +8,7 @@ module Cardano.Tracer.Handlers.Logs.File
   ( writeTraceObjectsToFile
   ) where
 
-import           Control.Monad (unless)
+import           Control.Monad.Extra (unlessM)
 import           Data.Aeson (ToJSON, (.=), object, toJSON)
 import           Data.Aeson.Text (encodeToLazyText)
 import qualified Data.ByteString.Lazy as LBS
@@ -40,8 +40,7 @@ writeTraceObjectsToFile _ _ _ _ [] = return ()
 writeTraceObjectsToFile nodeId nodeName rootDir format traceObjects = do
   createDirectoryIfMissing True rootDir
   createDirectoryIfMissing True subDirForLogs
-  symLinkIsHere <- doesFileExist pathToCurrentLog
-  unless symLinkIsHere $
+  unlessM (doesFileExist pathToCurrentLog) $
     createLogAndSymLink subDirForLogs format
   -- Symlink can be broken, check it.
   doesSymLinkValid pathToCurrentLog >>= \case
