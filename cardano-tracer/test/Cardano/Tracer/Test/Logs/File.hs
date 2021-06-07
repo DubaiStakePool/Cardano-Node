@@ -84,7 +84,8 @@ propFile format suffix host port = ioProperty $ do
     , ekgRequestFreq = 1.0
     , hasEKG         = Nothing
     , hasPrometheus  = Nothing
-    , logging        = [LoggingParams rootDir' FileMode format]
+    , hasRTView      = Nothing
+    , logging        = [LoggingParams rootDir FileMode format]
     , rotation       = Nothing
     }
 

@@ -61,6 +61,7 @@ data TracerConfig = TracerConfig
   , ekgRequestFreq :: !Pico   -- ^ How often to request EKG-metrics.
   , hasEKG         :: !(Maybe Endpoint)
   , hasPrometheus  :: !(Maybe Endpoint)
+  , hasRTView      :: !(Maybe Endpoint)
   , logging        :: ![LoggingParams]
   , rotation       :: !(Maybe RotationParams)
   } deriving (Eq, Generic, FromJSON, Show, ToJSON)
