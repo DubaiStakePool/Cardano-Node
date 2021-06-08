@@ -59,18 +59,19 @@ let
 
                TraceOptionSeverity  = [
                  {ns = ""; severity = "InfoF";}
-                 {ns = "Cardano.Node.AcceptPolicy"; severity = "SilenceF";}
-                 {ns = "Cardano.Node.ChainDB"; severity = "DebugF";}
+                 {ns = "Node.AcceptPolicy"; severity = "SilenceF";}
+                 {ns = "Node.ChainDB"; severity = "DebugF";}
+                 {ns = "Node.ChainDB.ImmutableDBEvent"; severity = "WarningF";}
                ];
 
                TraceOptionDetail = [
                  {ns = ""; detail = "DRegular";}
-                 {ns = "Cardano.Node.BlockFetchClient"; detail = "DBrief";}
+                 {ns = "Node.BlockFetchClient"; detail = "DBrief";}
                ];
 
                TraceOptionBackend = [
                  {ns = ""; backends = ["Stdout HumanFormat" "Forwarder" "EKGBackend"];}
-                 {ns = "Cardano.Node.ChainDB"; backends = ["Forwarder"];}
+                 {ns = "Node.ChainDB"; backends = ["Forwarder"];}
                ];
 
                TraceOptionForwarder = {host = "127.0.0.1"; port = 3010;};

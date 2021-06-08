@@ -17,6 +17,8 @@ module Cardano.Logging.Trace (
   , privately
   , setPrivacy
   , withPrivacy
+  , allPublic
+  , allConfidential
   , filterTraceByPrivacy
   , setDetails
   , withDetails
@@ -54,8 +56,7 @@ filterTrace :: (Monad m) =>
   -> Trace m a
 filterTrace ff (Trace tr) = Trace $ T.squelchUnless
     (\case
-      (_lc, Just Reset, _a)     -> True
-      (_lc, Just Optimize, _a)  -> True
+      (_lc, Just _, _a)     -> True
       (lc, mbC, a)              -> ff (lc, mbC, a))
       tr
 
@@ -66,6 +67,7 @@ filterTraceMaybe :: Monad m =>
 filterTraceMaybe (Trace tr) = Trace $
     T.squelchUnless
       (\case
+        (_lc, Just _, _) -> True
         (_lc, _mbC, Just _a) -> True
         (_lc, _mbC, Nothing) -> False)
       (T.contramap
@@ -83,10 +85,9 @@ filterTraceBySeverity :: Monad m =>
 filterTraceBySeverity (Just minSeverity) =
     filterTrace $
       \case
-        (_lc, Just Reset, _a)     -> True
-        (_lc, Just Optimize, _a)  -> True
-        (c, _, _e)                ->
-          case lcSeverity c of
+        (_lc, Just _, _a)     -> True
+        (lc, _, _e)                ->
+          case lcSeverity lc of
             Just s  -> fromEnum s >= fromEnum minSeverity
             Nothing -> True
 filterTraceBySeverity Nothing = id
@@ -134,13 +135,19 @@ filterTraceByPrivacy :: (Monad m) =>
   -> Trace m a
 filterTraceByPrivacy (Just minPrivacy) = filterTrace $
     \case
-      (_lc, Just Reset, _a)     -> True
-      (_lc, Just Optimize, _a)  -> True
+      (_lc, Just _, _a)     -> True
       (c, _mbC, _e) ->
         case lcPrivacy c of
           Just s  -> fromEnum s >= fromEnum minPrivacy
           Nothing -> True
 filterTraceByPrivacy Nothing = id
+
+allPublic :: a -> Privacy
+allPublic _ = Public
+
+allConfidential :: a -> Privacy
+allConfidential _ = Confidential
+
 
 -- | Sets privacy Confidential for the messages in this trace
 privately :: Monad m => Trace m a -> Trace m a
@@ -234,6 +241,5 @@ routingTrace
   -> Trace m a
 routingTrace rf rc = Trace $ T.arrow $ T.emit $
     \case
-      (lc, Just Reset, a) -> T.traceWith (unpackTrace rc) (lc, Just Reset, a)
-      (lc, Just Optimize, a) -> T.traceWith (unpackTrace rc) (lc, Just Optimize, a)
+      (lc, Just control, a) -> T.traceWith (unpackTrace rc) (lc, Just control, a)
       (lc, mbC, a) -> T.traceWith (unpackTrace (rf a)) (lc, mbC, a)

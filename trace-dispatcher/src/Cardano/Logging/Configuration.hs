@@ -106,17 +106,20 @@ parseRepresentation bs = fill (decodeEither' bs)
     fill' (TraceConfig tc _fc) cr =
       let tc'  = foldl' (\ tci (TraceOptionSeverity ns severity') ->
                           let ns' = split (=='.') ns
-                          in Map.insertWith (++) ns' [CoSeverity severity'] tci)
+                              ns'' = if ns' == [""] then [] else ns'
+                          in Map.insertWith (++) ns'' [CoSeverity severity'] tci)
                         tc
                         (traceOptionSeverity cr)
           tc'' = foldl' (\ tci (TraceOptionDetail ns detail') ->
                           let ns' = split (=='.') ns
-                          in Map.insertWith (++) ns' [CoDetail detail'] tci)
+                              ns'' = if ns' == [""] then [] else ns'
+                          in Map.insertWith (++) ns'' [CoDetail detail'] tci)
                         tc'
                         (traceOptionDetail cr)
           tc''' = foldl' (\ tci (TraceOptionBackend ns backend') ->
                           let ns' = split (=='.') ns
-                          in Map.insertWith (++) ns' [CoBackend backend'] tci)
+                              ns'' = if ns' == [""] then [] else ns'
+                          in Map.insertWith (++) ns'' [CoBackend backend'] tci)
                         tc''
                         (traceOptionBackend cr)
       in TraceConfig tc''' (traceOptionForwarder cr)
@@ -128,16 +131,16 @@ configureTracers config (Documented documented) tracers = do
     mapM_ (configureAllTrace (Config config)) tracers
     mapM_ (configureTrace Optimize) tracers
   where
-    configureTrace c (Trace tr) =
-      T.traceWith tr (emptyLoggingContext, Just c, dmPrototype (head documented))
-    configureAllTrace c (Trace tr) =
+    configureTrace control (Trace tr) =
+      T.traceWith tr (emptyLoggingContext, Just control, dmPrototype (head documented))
+    configureAllTrace control (Trace tr) =
       mapM
-        ((\ m -> T.traceWith tr (emptyLoggingContext, Just c, m)) . dmPrototype)
+        ((\ m -> T.traceWith tr (emptyLoggingContext, Just control, m)) . dmPrototype)
         documented
 
 -- | Take a selector function, and a function from trace to trace with
 --   this selector to make a trace transformer with a config value
-withNamespaceConfig :: forall m a b. (MonadIO m, Ord b) =>
+withNamespaceConfig :: forall m a b. (MonadIO m, Ord b, Show b) =>
      (TraceConfig -> Namespace -> b)
   -> (Maybe b -> Trace m a -> Trace m a)
   -> Trace m a
@@ -164,7 +167,7 @@ withNamespaceConfig extract needsConfigFunc tr = do
                 Nothing  -> T.traceWith
                               (unpackTrace $ needsConfigFunc (Just v) tr)
                               (lc, Nothing, a)
-        Left (_cmap, Nothing) -> error "Missing configuration"
+        Left (_cmap, Nothing) -> error ("Missing configuration " <> show (lcNamespace lc))
     mkTrace ref (lc, Just Reset, a) = do
       liftIO $ writeIORef ref (Left (Map.empty, Nothing))
       T.traceWith (unpackTrace $ needsConfigFunc Nothing tr) (lc, Just Reset, a)
@@ -198,37 +201,33 @@ withNamespaceConfig extract needsConfigFunc tr = do
       eitherConf <- liftIO $ readIORef ref
       case eitherConf of
         Left (cmap, Nothing) ->
-          case Map.size cmap of
-            0 ->  -- This will never be called!?
-                  pure ()
-            1 -> do
-                  case Map.elems cmap of
-                    [val] -> do
-                      liftIO $ writeIORef ref $ Right val
-                      T.traceWith
-                        (unpackTrace $ needsConfigFunc (Just val) tr)
-                        (lc, Just Optimize, m)
-                    _   -> error "Cardano.Logging.Configuration>>withConfig: Impossible"
-            _n -> let eles = nub $ Map.elems cmap
-                      decidingDict =
-                        foldl
-                            (\acc e -> Map.insertWith (\o _ -> o + 1 :: Integer) e 1 acc)
-                            Map.empty eles
-                      (mostCommon,_) = maximumBy (\(_, n') (_, m') -> compare n' m')
-                                                 (Map.assocs decidingDict)
-                      newmap = Map.filter (/= mostCommon) cmap
-                  in do
-                    liftIO $ writeIORef ref (Left (newmap, Just mostCommon))
-                    T.traceWith
-                      (unpackTrace $ needsConfigFunc Nothing tr)
-                      (lc, Just Optimize, m)
-        Right _val -> T.traceWith
-                        (unpackTrace $ needsConfigFunc Nothing tr)
-                        (lc, Just Optimize, m)
+          case nub (Map.elems cmap) of
+            []     ->  -- This will never be called!?
+                      pure ()
+            [val]  -> do
+                        liftIO $ writeIORef ref $ Right val
+                        T.traceWith
+                          (unpackTrace $ needsConfigFunc (Just val) tr)
+                          (lc, Just Optimize, m)
+            _      -> let decidingDict =
+                            foldl
+                              (\acc e -> Map.insertWith (+) e (1 :: Int) acc)
+                              Map.empty
+                              (Map.elems cmap)
+                          (mostCommon, _) = maximumBy
+                                              (\(_, n') (_, m') -> compare n' m')
+                                              (Map.assocs decidingDict)
+                          newmap = Map.filter (/= mostCommon) cmap
+                      in do
+                        liftIO $ writeIORef ref (Left (newmap, Just mostCommon))
+                        T.traceWith
+                          (unpackTrace $ needsConfigFunc Nothing tr)
+                          (lc, Just Optimize, m)
+        Right _val -> error $ "Trace not reset before reconfiguration (3)"
+                            ++ show (lcNamespace lc)
         Left (_cmap, Just _v) ->
-                    T.traceWith
-                        (unpackTrace $ needsConfigFunc Nothing tr)
-                        (lc, Just Optimize, m)
+                      error $ "Trace not reset before reconfiguration (4)"
+                                  ++ show (lcNamespace lc)
 
 -- | Filter a trace by severity and take the filter value from the config
 filterSeverityFromConfig :: (MonadIO m) =>
@@ -258,7 +257,7 @@ getOption sel config [] =
                       (opt : _) -> Just opt
 getOption sel config context =
   case Map.lookup context (tcOptions config) of
-    Nothing -> getOption sel config (tail context)
+    Nothing -> getOption sel config (init context)
     Just options -> case mapMaybe sel options of
                       []        -> getOption sel config (init context)
                       (opt : _) -> Just opt

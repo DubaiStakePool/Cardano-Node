@@ -151,9 +151,9 @@ instance AE.FromJSON DetailLevel
 
 -- | Privacy of a message. Default is Public
 data Privacy =
-      Public                    -- ^ can be public.
-    | Confidential              -- ^ confidential information - handle with care
-  deriving (Show, Eq, Ord, Bounded, Enum)
+      Confidential              -- ^ confidential information - handle with care
+    | Public                    -- ^ can be public.
+      deriving (Show, Eq, Ord, Bounded, Enum)
 
 -- | Severity of a message
 data SeverityS
