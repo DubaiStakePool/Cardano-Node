@@ -181,11 +181,10 @@ formatContextHuman withColor hostname application LoggingContext {..}  txt = do
 -- The text argument gives the application name which is prepended to the namespace
 machineFormatter
   :: forall a m . (LogFormatting a, MonadIO m)
-  => DetailLevel
-  -> Text
+  => Text
   -> Trace m FormattedMessage
   -> m (Trace m a)
-machineFormatter detailLevel application (Trace tr) = do
+machineFormatter application (Trace tr) = do
   hn <- liftIO getHostName
   let trr = mkTracer hn
   pure $ Trace (T.arrow trr)
@@ -193,6 +192,9 @@ machineFormatter detailLevel application (Trace tr) = do
     mkTracer hn = T.emit $
       \case
         (lc, Nothing, v) -> do
+          let detailLevel = case lcDetails lc of
+                              Nothing -> DRegular
+                              Just dl -> dl
           obj <- liftIO $ formatContextMachine hn application lc (forMachine detailLevel v)
           T.traceWith tr (lc { lcNamespace = application : lcNamespace lc}
                              , Nothing

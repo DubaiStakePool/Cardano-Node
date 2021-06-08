@@ -24,6 +24,7 @@ import           Network.Mux (MuxTrace (..), WithMuxBearer (..))
 import qualified Network.Socket as Socket
 
 import           Cardano.Logging
+import qualified "trace-dispatcher" Control.Tracer as NT
 import           Cardano.Prelude hiding (trace)
 import           Cardano.TraceDispatcher.ChainDB.Combinators
 import           Cardano.TraceDispatcher.ChainDB.Docu
@@ -106,7 +107,7 @@ import           Ouroboros.Network.TxSubmission.Outbound
 
 type Peer = NtN.ConnectionId Socket.SockAddr
 
-mkCardanoTracer ::
+mkCardanoTracer :: forall evt.
      LogFormatting evt
   => Text
   -> (evt -> [Text])
@@ -116,33 +117,54 @@ mkCardanoTracer ::
   -> Trace IO FormattedMessage
   -> Maybe (Trace IO FormattedMessage)
   -> IO (Trace IO evt)
-mkCardanoTracer name namesFor severityFor privacyFor trStdout trForward mbTrEkg = do
-  tr1 <- humanFormatter True "Cardano" trStdout
-  tr2' <- forwardFormatter "Cardano" trForward
-  let tr2 = filterTraceByPrivacy (Just Public) tr2'
-  tr3 <- filterSeverityFromConfig
-            (tr1 <> tr2)
-  case mbTrEkg of
-    Nothing ->
-      pure
-        $ withNamesAppended namesFor
-          $ appendName name
-            $ appendName "Node"
-              $ withSeverity severityFor
-                $ withPrivacy privacyFor
-                  tr3
+mkCardanoTracer name namesFor severityFor privacyFor
+  trStdout trForward mbTrEkg = do
+    tr <- withBackendsAndFormattingFromConfig routeAndFormat
+    transformer tr
+  where
+    transformer :: Trace IO evt -> IO (Trace IO evt)
+    transformer t = do
+      t'  <- filterSeverityFromConfig t
+      t'' <- withDetailsFromConfig t'
+      pure $ withNamesAppended namesFor
+            $ appendName name
+              $ appendName "Node"
+                $ withSeverity severityFor
+                  $ withPrivacy privacyFor
+                    t''
+    routeAndFormat ::
+         Maybe [Backend]
+      -> Trace m x
+      -> IO (Trace IO evt)
+    routeAndFormat mbBackends _ =
+      let backends = case mbBackends of
+                        Just b -> b
+                        Nothing -> [EKGBackend, Forwarder, Stdout HumanFormat]
+      in do
+        mbEkgTrace     <- case mbTrEkg of
+                            Nothing -> pure Nothing
+                            Just ekgTrace ->
+                              if elem EKGBackend backends
+                                then liftM Just
+                                      (metricsFormatter "Cardano" ekgTrace)
+                                else pure Nothing
+        mbForwardTrace <- if elem Forwarder backends
+                            then liftM (Just . filterTraceByPrivacy (Just Public))
+                                  (forwardFormatter "Cardano" trForward)
+                            else pure Nothing
+        mbStdoutTrace  <-  if elem (Stdout HumanFormat) backends
+                            then liftM Just
+                                (humanFormatter True "Cardano" trStdout)
+                            else if elem (Stdout MachineFormat) backends
+                              then liftM Just
+                                (machineFormatter "Cardano" trStdout)
+                              else pure Nothing
+        case mbEkgTrace <> mbForwardTrace <> mbStdoutTrace of
+          Nothing -> pure $ Trace NT.nullTracer
+          Just tr -> pure tr
 
-    Just trEkg -> do
-      tr4 <- metricsFormatter "Cardano" trEkg
-      tr5 <- filterSeverityFromConfig
-                (tr1 <> tr2 <> tr4)
-      pure
-        $ withNamesAppended namesFor
-          $ appendName name
-            $ appendName "Node"
-              $ withSeverity severityFor
-                $ withPrivacy privacyFor
-                  tr5
+
+
 
 mkStandardTracerSimple ::
      LogFormatting evt
@@ -185,7 +207,6 @@ mkDispatchTracers
   -> IO (Tracers peer localPeer blk)
 mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
   trBase trForward mbTrEKG trConfig = do
-    trace ("traceConfig " <> show trConfig) $ pure ()
     cdbmTr <- mkCardanoTracer
                 "ChainDB"
                 namesForChainDBTraceEvents

@@ -10,6 +10,8 @@ module Cardano.Logging.Configuration
   ( configureTracers
   , withNamespaceConfig
   , filterSeverityFromConfig
+  , withDetailsFromConfig
+  , withBackendsAndFormattingFromConfig
   , readConfiguration
   ) where
 
@@ -27,7 +29,7 @@ import           Data.Text (Text, split)
 import           Data.Yaml
 import           GHC.Generics
 
-import           Cardano.Logging.Trace (filterTraceBySeverity)
+import           Cardano.Logging.Trace (filterTraceBySeverity, setDetails)
 import           Cardano.Logging.Types
 
 data TraceOptionSeverity = TraceOptionSeverity {
@@ -140,12 +142,12 @@ configureTracers config (Documented documented) tracers = do
 
 -- | Take a selector function, and a function from trace to trace with
 --   this selector to make a trace transformer with a config value
-withNamespaceConfig :: forall m a b. (MonadIO m, Ord b, Show b) =>
+withNamespaceConfig :: forall m a b c. (MonadIO m, Ord b) =>
      (TraceConfig -> Namespace -> b)
-  -> (Maybe b -> Trace m a -> Trace m a)
-  -> Trace m a
+  -> (Maybe b -> Trace m c -> m (Trace m a))
+  -> Trace m c
   -> m (Trace m a)
-withNamespaceConfig extract needsConfigFunc tr = do
+withNamespaceConfig extract withConfig tr = do
     ref  <- liftIO (newIORef (Left (Map.empty, Nothing)))
     pure $ Trace $ T.arrow $ T.emit $ mkTrace ref
   where
@@ -156,21 +158,23 @@ withNamespaceConfig extract needsConfigFunc tr = do
     mkTrace ref (lc, Nothing, a) = do
       eitherConf <- liftIO $ readIORef ref
       case eitherConf of
-        Right val ->
+        Right val -> do
+          tt <- withConfig (Just val) tr
           T.traceWith
-            (unpackTrace $ needsConfigFunc (Just val) tr) (lc, Nothing, a)
+            (unpackTrace tt) (lc, Nothing, a)
         Left (cmap, Just v) ->
           case Map.lookup (lcNamespace lc) cmap of
-                Just val -> T.traceWith
-                              (unpackTrace $ needsConfigFunc (Just val) tr)
-                              (lc, Nothing, a)
-                Nothing  -> T.traceWith
-                              (unpackTrace $ needsConfigFunc (Just v) tr)
-                              (lc, Nothing, a)
+                Just val -> do
+                  tt <- withConfig (Just val) tr
+                  T.traceWith (unpackTrace tt) (lc, Nothing, a)
+                Nothing  -> do
+                  tt <- withConfig (Just v) tr
+                  T.traceWith (unpackTrace tt) (lc, Nothing, a)
         Left (_cmap, Nothing) -> error ("Missing configuration " <> show (lcNamespace lc))
     mkTrace ref (lc, Just Reset, a) = do
       liftIO $ writeIORef ref (Left (Map.empty, Nothing))
-      T.traceWith (unpackTrace $ needsConfigFunc Nothing tr) (lc, Just Reset, a)
+      tt <- withConfig Nothing tr
+      T.traceWith (unpackTrace tt) (lc, Just Reset, a)
 
     mkTrace ref (lc, Just (Config c), m) = do
       let ! val = extract c (lcNamespace lc)
@@ -182,14 +186,13 @@ withNamespaceConfig extract needsConfigFunc tr = do
               liftIO
                   $ writeIORef ref
                   $ Left (Map.insert (lcNamespace lc) val cmap, Nothing)
-              T.traceWith
-                (unpackTrace $ needsConfigFunc (Just val) tr)
-                (lc, Just (Config c), m)
+              tt <- withConfig (Just val) tr
+              T.traceWith (unpackTrace tt) (lc, Just (Config c), m)
             Just v  -> do
               if v == val
-                then T.traceWith
-                      (unpackTrace $ needsConfigFunc (Just val) tr)
-                      (lc, Just (Config c), m)
+                then do
+                  tt <- withConfig (Just val) tr
+                  T.traceWith (unpackTrace tt) (lc, Just (Config c), m)
                 else error $ "Inconsistent trace configuration with context "
                                   ++ show (lcNamespace lc)
         Right _val -> error $ "Trace not reset before reconfiguration (1)"
@@ -206,9 +209,8 @@ withNamespaceConfig extract needsConfigFunc tr = do
                       pure ()
             [val]  -> do
                         liftIO $ writeIORef ref $ Right val
-                        T.traceWith
-                          (unpackTrace $ needsConfigFunc (Just val) tr)
-                          (lc, Just Optimize, m)
+                        tt <- withConfig (Just val) tr
+                        T.traceWith (unpackTrace tt) (lc, Just Optimize, m)
             _      -> let decidingDict =
                             foldl
                               (\acc e -> Map.insertWith (+) e (1 :: Int) acc)
@@ -220,9 +222,8 @@ withNamespaceConfig extract needsConfigFunc tr = do
                           newmap = Map.filter (/= mostCommon) cmap
                       in do
                         liftIO $ writeIORef ref (Left (newmap, Just mostCommon))
-                        T.traceWith
-                          (unpackTrace $ needsConfigFunc Nothing tr)
-                          (lc, Just Optimize, m)
+                        tt <- withConfig Nothing tr
+                        T.traceWith (unpackTrace tt) (lc, Just Optimize, m)
         Right _val -> error $ "Trace not reset before reconfiguration (3)"
                             ++ show (lcNamespace lc)
         Left (_cmap, Just _v) ->
@@ -233,7 +234,29 @@ withNamespaceConfig extract needsConfigFunc tr = do
 filterSeverityFromConfig :: (MonadIO m) =>
      Trace m a
   -> m (Trace m a)
-filterSeverityFromConfig = withNamespaceConfig getSeverity filterTraceBySeverity
+filterSeverityFromConfig =
+    withNamespaceConfig getSeverity (\ a b -> pure $ filterTraceBySeverity a b)
+
+-- | Set detail level of a trace from the config
+withDetailsFromConfig :: (MonadIO m) =>
+     Trace m a
+  -> m (Trace m a)
+withDetailsFromConfig =
+  withNamespaceConfig
+    getDetails
+    (\mbDtl b -> case mbDtl of
+              Just dtl  -> pure $ setDetails dtl b
+              Nothing   -> pure $ setDetails DRegular b)
+
+-- | Routing and formatting of a trace from the config
+withBackendsAndFormattingFromConfig :: (MonadIO m) =>
+     (Maybe [Backend] -> Trace m FormattedMessage -> m (Trace m a))
+  -> m (Trace m a)
+withBackendsAndFormattingFromConfig routerAndFormatter =
+  withNamespaceConfig
+    getBackends
+    routerAndFormatter
+    (Trace T.nullTracer)
 
 --------------------------------------------------------
 -- Internal
@@ -246,6 +269,26 @@ getSeverity config context =
     severitySelector :: ConfigOption -> Maybe SeverityF
     severitySelector (CoSeverity s) = Just s
     severitySelector _              = Nothing
+
+-- | If no details can be found in the config, it is set to DRegular
+getDetails :: TraceConfig -> Namespace -> DetailLevel
+getDetails config context =
+    fromMaybe DRegular (getOption detailSelector config context)
+  where
+    detailSelector :: ConfigOption -> Maybe DetailLevel
+    detailSelector (CoDetail d) = Just d
+    detailSelector _            = Nothing
+
+-- | If no backends can be found in the config, it is set to
+-- [EKGBackend, Forwarder, Stdout HumanFormat]
+getBackends :: TraceConfig -> Namespace -> [Backend]
+getBackends config context =
+    fromMaybe [EKGBackend, Forwarder, Stdout HumanFormat]
+      (getOption backendSelector config context)
+  where
+    backendSelector :: ConfigOption -> Maybe [Backend]
+    backendSelector (CoBackend s)  = Just s
+    backendSelector _              = Nothing
 
 -- | Searches in the config to find an option
 getOption :: (ConfigOption -> Maybe a) -> TraceConfig -> Namespace -> Maybe a

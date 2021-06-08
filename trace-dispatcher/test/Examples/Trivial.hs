@@ -14,7 +14,7 @@ import           Examples.TestObjects
 test1 :: IO ()
 test1 = do
     stdoutTracer' <- standardTracer Nothing
-    simpleTracer <- machineFormatter DRegular "cardano" stdoutTracer'
+    simpleTracer <- machineFormatter "cardano" stdoutTracer'
     configureTracers emptyTraceConfig traceForgeEventDocu [simpleTracer]
     let simpleTracer1 = filterTraceBySeverity (Just WarningF) simpleTracer
     let simpleTracerC1 = appendName "Outer1" simpleTracer1

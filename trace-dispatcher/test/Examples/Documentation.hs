@@ -14,7 +14,7 @@ docTracer = do
   t1' <- humanFormatter True "cardano" t
   let t1 = withSeverityTraceForgeEvent
                 (appendName "node" t1')
-  t2' <- machineFormatter DRegular "cardano" t
+  t2' <- machineFormatter "cardano" t
   let t2 = withSeverityTraceForgeEvent
                 (appendName "node" t2')
   bl <- documentMarkdown traceForgeEventDocu [t1, t2]
