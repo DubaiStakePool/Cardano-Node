@@ -21,8 +21,8 @@ import           Network.Mux (MuxTrace (..), WithMuxBearer (..))
 import qualified Network.Socket as Socket
 import           Text.Show
 
-import           Cardano.TraceDispatcher.Common.ConvertTxId
-import           Cardano.TraceDispatcher.Common.Formatting ()
+import           Cardano.TraceDispatcher.Era.ConvertTxId
+import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Render
 
 import           Cardano.Logging

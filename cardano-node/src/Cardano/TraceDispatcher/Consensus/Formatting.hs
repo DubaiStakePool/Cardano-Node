@@ -21,9 +21,9 @@ import           Text.Show
 
 import           Cardano.Logging
 import           Cardano.Prelude hiding (Show, show)
-import           Cardano.TraceDispatcher.Common.Formatting ()
-import           Cardano.TraceDispatcher.Common.Byron ()
-import           Cardano.TraceDispatcher.Common.Shelley ()
+import           Cardano.TraceDispatcher.Formatting ()
+import           Cardano.TraceDispatcher.Era.Byron ()
+import           Cardano.TraceDispatcher.Era.Shelley ()
 import           Cardano.TraceDispatcher.Render
 
 import           Ouroboros.Consensus.Block

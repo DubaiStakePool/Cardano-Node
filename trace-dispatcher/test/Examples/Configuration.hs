@@ -39,18 +39,22 @@ tracers  = do
 
 config1 :: TraceConfig
 config1 = TraceConfig {
-    tcOptions = Map.fromList
+      tcOptions = Map.fromList
           [([], [CoSeverity SilenceF]),
           (["tracer1"], [CoSeverity ErrorF]),
           (["tracer2"], [CoSeverity CriticalF]),
           (["tracer2","bubble"], [CoSeverity InfoF])]
+    , tcForwarder = LocalPipe "forwarder.log"
+    , tcForwarderCacheSize = 100
     }
 
 config2 :: TraceConfig
 config2 = TraceConfig {
-    tcOptions = Map.fromList [([], [CoSeverity InfoF]),
+      tcOptions = Map.fromList [([], [CoSeverity InfoF]),
           (["tracer2"], [CoSeverity WarningF]),
           (["tracer2","bubble"], [CoSeverity WarningF])]
+    , tcForwarder = LocalPipe "forwarder.log"
+    , tcForwarderCacheSize = 100
     }
 
 testConfig' :: MonadIO m => TraceConfig -> Trace m TestMessage -> Trace m TestMessage -> m ()

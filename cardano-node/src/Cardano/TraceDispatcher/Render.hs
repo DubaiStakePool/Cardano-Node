@@ -37,7 +37,7 @@ import qualified Data.Text.Encoding as Text
 import           Cardano.Logging
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..),
                      WithOrigin (..))
-import           Cardano.TraceDispatcher.Common.ConvertTxId (ConvertTxId' (..))
+import           Cardano.TraceDispatcher.Era.ConvertTxId (ConvertTxId' (..))
 import           Ouroboros.Consensus.Block (BlockNo (..), ConvertRawHash (..),
                      RealPoint (..))
 import           Ouroboros.Consensus.Block.Abstract (Point (..))

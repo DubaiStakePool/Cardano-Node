@@ -75,12 +75,10 @@ library
                        Cardano.Node.Run
                        Cardano.Node.STM
                        Cardano.Node.Types
-                       Cardano.TraceDispatcher.Tracers
-                       Cardano.TraceDispatcher.Common.Byron
-                       Cardano.TraceDispatcher.Common.HardFork
-                       Cardano.TraceDispatcher.Common.Shelley
-                       Cardano.TraceDispatcher.Common.Formatting
-                       Cardano.TraceDispatcher.Common.ConvertTxId
+                       Cardano.TraceDispatcher.Era.Byron
+                       Cardano.TraceDispatcher.Era.HardFork
+                       Cardano.TraceDispatcher.Era.Shelley
+                       Cardano.TraceDispatcher.Era.ConvertTxId
                        Cardano.TraceDispatcher.ChainDB.Docu
                        Cardano.TraceDispatcher.ChainDB.Formatting
                        Cardano.TraceDispatcher.ChainDB.Combinators
@@ -91,7 +89,9 @@ library
                        Cardano.TraceDispatcher.Network.Docu
                        Cardano.TraceDispatcher.Network.Formatting
                        Cardano.TraceDispatcher.Network.Combinators
+                       Cardano.TraceDispatcher.Formatting
                        Cardano.TraceDispatcher.Render
+                       Cardano.TraceDispatcher.Tracers
                        Cardano.Tracing.Config
                        Cardano.Tracing.Constraints
                        Cardano.Tracing.ConvertTxId

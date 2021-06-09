@@ -11,7 +11,7 @@ import           Prelude (Show)
 import           Data.Aeson
 
 import           Cardano.BM.Tracing (ToObject)
-import           Cardano.TraceDispatcher.Common.ConvertTxId (ConvertTxId')
+import           Cardano.TraceDispatcher.Era.ConvertTxId (ConvertTxId')
 import           Cardano.TraceDispatcher.Consensus.StateInfo (GetKESInfo (..))
 import           Cardano.Tracing.ConvertTxId(ConvertTxId)
 import           Cardano.Tracing.Queries (LedgerQueries)

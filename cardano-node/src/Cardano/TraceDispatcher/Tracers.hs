@@ -28,8 +28,8 @@ import qualified "trace-dispatcher" Control.Tracer as NT
 import           Cardano.Prelude hiding (trace)
 import           Cardano.TraceDispatcher.ChainDB.Combinators
 import           Cardano.TraceDispatcher.ChainDB.Docu
-import           Cardano.TraceDispatcher.Common.ConvertTxId
-import           Cardano.TraceDispatcher.Common.Formatting ()
+import           Cardano.TraceDispatcher.Era.ConvertTxId
+import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Consensus.Combinators
 import           Cardano.TraceDispatcher.Consensus.Docu
 import           Cardano.TraceDispatcher.Consensus.StateInfo

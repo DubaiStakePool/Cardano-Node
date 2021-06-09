@@ -3,7 +3,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans  #-}
 
-module Cardano.TraceDispatcher.Common.Formatting
+module Cardano.TraceDispatcher.Formatting
   (
   ) where
 

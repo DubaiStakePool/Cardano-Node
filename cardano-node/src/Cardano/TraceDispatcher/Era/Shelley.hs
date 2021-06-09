@@ -15,7 +15,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans  #-}
 
-module Cardano.TraceDispatcher.Common.Shelley ()
+module Cardano.TraceDispatcher.Era.Shelley ()
   where
 
 import           Cardano.Prelude

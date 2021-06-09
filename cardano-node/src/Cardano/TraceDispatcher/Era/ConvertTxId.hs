@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.TraceDispatcher.Common.ConvertTxId
+module Cardano.TraceDispatcher.Era.ConvertTxId
   ( ConvertTxId' (..)
   ) where
 

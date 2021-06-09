@@ -24,7 +24,7 @@ module Cardano.Logging.Types (
   , SeverityF(..)
   , ConfigOption(..)
   , RemoteAddr(..)
-  , LogFormat(..)
+  , FormatLogging(..)
   , TraceConfig(..)
   , emptyTraceConfig
   , FormattedMessage(..)
@@ -198,7 +198,7 @@ data TraceObject = TraceObject {
 
 data FormattedMessage =
       FormattedHuman Bool Text
-      -- ^ The bool specifies if the formatting includes colours  
+      -- ^ The bool specifies if the formatting includes colours
     | FormattedMachine Text
     | FormattedMetrics [Metric]
     | FormattedForwarder TraceObject
@@ -206,7 +206,7 @@ data FormattedMessage =
 
 data BackendConfig =
     Forwarder
-  | Stdout LogFormat
+  | Stdout FormatLogging
   | EKGBackend
   deriving (Eq, Ord, Show, Generic)
 
@@ -225,7 +225,7 @@ instance AE.FromJSON BackendConfig where
   parseJSON (AE.String "Stdout MachineFormat") = pure $ Stdout MachineFormat
   parseJSON other                              = error (show other)
 
-data LogFormat = HumanFormatColoured | HumanFormatUncoloured | MachineFormat
+data FormatLogging = HumanFormatColoured | HumanFormatUncoloured | MachineFormat
   deriving (Eq, Ord, Show)
 
 -- Configuration options for individual namespace elements
