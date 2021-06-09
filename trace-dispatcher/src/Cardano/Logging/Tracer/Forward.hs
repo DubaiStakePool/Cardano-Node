@@ -92,7 +92,8 @@ forwardTracer :: forall m. (MonadIO m)
   => TraceConfig
   -> m (Trace m FormattedMessage)
 forwardTracer config = do
-    tbQueue <- liftIO $ newTBQueueIO 1000000
+    tbQueue <- liftIO $ newTBQueueIO
+                          (fromIntegral (tcForwarderCacheSize config))
     store <- liftIO $ EKG.newStore
     liftIO $ EKG.registerGcMetrics store
     liftIO $ launchForwardersSimple (tcForwarder config) tbQueue store
@@ -109,7 +110,7 @@ forwardTracer config = do
       st  <- readIORef stateRef
       atomically $ writeTBQueue (ftQueue st) lo
     output _stateRef LoggingContext {} (Just Reset) _msg = liftIO $ do
-      -- TODO discuss reconfiguration
+      -- TODO JNF discuss reconfiguration
       pure ()
     output _ lk (Just c@Document {}) (FormattedForwarder lo) = do
       case toHuman lo of
@@ -128,6 +129,7 @@ launchForwardersSimple endpoint tbQueue store =
     try (launchForwarders' endpoint (ekgConfig, tfConfig) tbQueue store) >>= \case
       Left (_e :: SomeException) ->
         -- There is some problem with the connection with the acceptor, try it again.
+        -- TODO JNF What if it runs in an infinite loop?
         launchForwardersSimple'
       Right _ ->
         pure () -- Actually, the function 'connectToNode' never returns.
@@ -136,7 +138,6 @@ launchForwardersSimple endpoint tbQueue store =
   ekgConfig =
     EKGF.ForwarderConfiguration
       { EKGF.forwarderTracer    = contramap show stdoutTracer
-                                    -- TODO: meaning of this
       , EKGF.acceptorEndpoint   = forEKGF endpoint
       , EKGF.reConnectFrequency = 1.0
       , EKGF.actionOnRequest    = const (return ())
@@ -146,9 +147,8 @@ launchForwardersSimple endpoint tbQueue store =
   tfConfig =
     TF.ForwarderConfiguration
       { TF.forwarderTracer  = contramap show stdoutTracer
-                                  -- TODO: meaning of this
       , TF.acceptorEndpoint = forTF endpoint
-      , TF.nodeBasicInfo    = return [("NodeName", "node-1")]
+      , TF.nodeBasicInfo    = return []
       , TF.actionOnRequest  = const (return ())
       }
 

@@ -107,6 +107,19 @@ import           Ouroboros.Network.TxSubmission.Outbound
 
 type Peer = NtN.ConnectionId Socket.SockAddr
 
+-- | Construct a tracer according to the requirements for cardano node.
+--
+-- The tracer gets a 'name', which is appended to its namespace.
+--
+-- The tracer gets a 'namesFor', 'severityFor' and 'privacyFor' function
+-- as arguments, to set the logging context accordingly.
+--
+-- The tracer gets the backends: 'trStdout', 'trForward' and 'mbTrEkg'
+-- as arguments.
+--
+-- The returned tracer need to be configured for the specification of
+-- filtering, detailLevel, and backends with formatting before use.
+
 mkCardanoTracer :: forall evt.
      LogFormatting evt
   => Text
@@ -120,18 +133,18 @@ mkCardanoTracer :: forall evt.
 mkCardanoTracer name namesFor severityFor privacyFor
   trStdout trForward mbTrEkg = do
     tr <- withBackendsAndFormattingFromConfig routeAndFormat
-    transformer tr
+    addContextAndFilter tr
   where
-    transformer :: Trace IO evt -> IO (Trace IO evt)
-    transformer t = do
-      t'  <- filterSeverityFromConfig t
-      t'' <- withDetailsFromConfig t'
+    addContextAndFilter :: Trace IO evt -> IO (Trace IO evt)
+    addContextAndFilter t = do
+      tr'  <- filterSeverityFromConfig t
+      tr'' <- withDetailsFromConfig tr'
       pure $ withNamesAppended namesFor
             $ appendName name
               $ appendName "Node"
                 $ withSeverity severityFor
                   $ withPrivacy privacyFor
-                    t''
+                    tr''
     routeAndFormat ::
          Maybe [Backend]
       -> Trace m x
@@ -163,9 +176,6 @@ mkCardanoTracer name namesFor severityFor privacyFor
           Nothing -> pure $ Trace NT.nullTracer
           Just tr -> pure tr
 
-
-
-
 mkStandardTracerSimple ::
      LogFormatting evt
   => Text
@@ -181,7 +191,7 @@ mkStandardTracerSimple name namesFor severityFor trStdout = do
 
 
 
--- | Tracers for all system components.
+-- | Construct tracers for all system components.
 --
 mkDispatchTracers
   :: forall peer localPeer blk.
@@ -502,6 +512,7 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
 mkDispatchTracers blockConfig tOpts tr nodeKern ekgDirect _ _ _ _ =
   mkTracers blockConfig tOpts tr nodeKern ekgDirect
 
+
 docTracers :: forall blk t.
   ( Show t
   , Show (Header blk)
@@ -521,8 +532,10 @@ docTracers :: forall blk t.
   , HasTxs blk
   , ConvertTxId' blk
   )
-  => Proxy blk -> IO ()
-docTracers _ = do
+  => [Char]
+  -> Proxy blk
+  -> IO ()
+docTracers fileName _ = do
     trBase <- standardTracer Nothing
     cdbmTr <- mkStandardTracerSimple
                 "ChainDB"
@@ -932,5 +945,5 @@ docTracers _ = do
             ++ diTrDoc
 
     res <- buildersToText bl
-    T.writeFile "/home/yupanqui/IOHK/CardanoLogging.md" res
+    T.writeFile fileName res
     pure ()

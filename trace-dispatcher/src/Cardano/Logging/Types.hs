@@ -51,8 +51,8 @@ import           Data.Text (Text, pack)
 import           Data.Text.Lazy (toStrict)
 import           Data.Time (UTCTime)
 import           Data.Word (Word16)
-import           Network.HostName (HostName)
 import           GHC.Generics
+import           Network.HostName (HostName)
 
 -- | The Trace carries the underlying tracer Tracer from the contra-tracer package.
 --   It adds a 'LoggingContext' and maybe a 'TraceControl' to every message.
@@ -247,8 +247,9 @@ instance AE.FromJSON RemoteAddr where
 
 data TraceConfig = TraceConfig {
      -- | Options specific to a certain namespace
-    tcOptions   :: Map.Map Namespace [ConfigOption]
-  , tcForwarder :: RemoteAddr
+    tcOptions            :: Map.Map Namespace [ConfigOption]
+  , tcForwarder          :: RemoteAddr
+  , tcForwarderCacheSize :: Int
 }
   deriving (Eq, Ord, Show)
 
@@ -256,6 +257,7 @@ emptyTraceConfig :: TraceConfig
 emptyTraceConfig = TraceConfig {
     tcOptions = Map.empty
   , tcForwarder = LocalPipe "forwarder.log"
+  , tcForwarderCacheSize = 1500
   }
 
 -- | When configuring a net of tracers, it should be run with Config on all

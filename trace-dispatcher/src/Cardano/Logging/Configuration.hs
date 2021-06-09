@@ -78,10 +78,11 @@ instance AE.FromJSON TraceOptionBackend where
                            <*> obj .: "backends"
 
 data ConfigRepresentation = ConfigRepresentation {
-    traceOptionSeverity  :: [TraceOptionSeverity]
-  , traceOptionDetail    :: [TraceOptionDetail]
-  , traceOptionBackend   :: [TraceOptionBackend]
-  , traceOptionForwarder :: RemoteAddr
+    traceOptionSeverity     :: [TraceOptionSeverity]
+  , traceOptionDetail       :: [TraceOptionDetail]
+  , traceOptionBackend      :: [TraceOptionBackend]
+  , traceOptionForwarder    :: RemoteAddr
+  , traceOptionForwardCache :: Int
   }
   deriving (Eq, Ord, Show)
 
@@ -91,6 +92,7 @@ instance AE.FromJSON ConfigRepresentation where
                            <*> obj .: "TraceOptionDetail"
                            <*> obj .: "TraceOptionBackend"
                            <*> obj .: "TraceOptionForwarder"
+                           <*> obj .: "TraceOptionForwardCache"
 
 readConfiguration :: FilePath -> IO TraceConfig
 readConfiguration fp =
@@ -105,7 +107,7 @@ parseRepresentation bs = fill (decodeEither' bs)
     fill (Left e)   = Left e
     fill (Right rl) = Right $ fill' emptyTraceConfig rl
     fill' :: TraceConfig -> ConfigRepresentation -> TraceConfig
-    fill' (TraceConfig tc _fc) cr =
+    fill' (TraceConfig tc _fc _fcc) cr =
       let tc'  = foldl' (\ tci (TraceOptionSeverity ns severity') ->
                           let ns' = split (=='.') ns
                               ns'' = if ns' == [""] then [] else ns'
@@ -124,7 +126,10 @@ parseRepresentation bs = fill (decodeEither' bs)
                           in Map.insertWith (++) ns'' [CoBackend backend'] tci)
                         tc''
                         (traceOptionBackend cr)
-      in TraceConfig tc''' (traceOptionForwarder cr)
+      in TraceConfig
+          tc'''
+          (traceOptionForwarder cr)
+          (traceOptionForwardCache cr)
 
 -- | Call this function at initialisation, and later for reconfiguration
 configureTracers :: Monad m => TraceConfig -> Documented a -> [Trace m a]-> m ()
@@ -245,12 +250,12 @@ withDetailsFromConfig =
   withNamespaceConfig
     getDetails
     (\mbDtl b -> case mbDtl of
-              Just dtl  -> pure $ setDetails dtl b
-              Nothing   -> pure $ setDetails DRegular b)
+              Just dtl -> pure $ setDetails dtl b
+              Nothing  -> pure $ setDetails DRegular b)
 
 -- | Routing and formatting of a trace from the config
 withBackendsAndFormattingFromConfig :: (MonadIO m) =>
-     (Maybe [Backend] -> Trace m FormattedMessage -> m (Trace m a))
+  (Maybe [Backend] -> Trace m FormattedMessage -> m (Trace m a))
   -> m (Trace m a)
 withBackendsAndFormattingFromConfig routerAndFormatter =
   withNamespaceConfig
@@ -287,8 +292,8 @@ getBackends config context =
       (getOption backendSelector config context)
   where
     backendSelector :: ConfigOption -> Maybe [Backend]
-    backendSelector (CoBackend s)  = Just s
-    backendSelector _              = Nothing
+    backendSelector (CoBackend s) = Just s
+    backendSelector _             = Nothing
 
 -- | Searches in the config to find an option
 getOption :: (ConfigOption -> Maybe a) -> TraceConfig -> Namespace -> Maybe a
