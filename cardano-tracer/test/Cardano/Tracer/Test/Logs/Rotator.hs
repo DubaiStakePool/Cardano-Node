@@ -71,6 +71,7 @@ propRotator host port = ioProperty $ do
     , ekgRequestFreq = 1.0
     , hasEKG         = Nothing
     , hasPrometheus  = Nothing
+    , hasRTView      = Nothing
     , logging        = [LoggingParams rootDir' FileMode format]
     , rotation       = Just $
         RotationParams
