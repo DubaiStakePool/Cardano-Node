@@ -15,14 +15,14 @@ import           Graphics.UI.Threepenny.Core (UI, liftIO, onEvent, set, (#), (#+
 --import           Cardano.RTView.CLI (RTViewParams (..))
 --import           Cardano.RTView.GUI.CSS.Style (ownCSS)
 --import           Cardano.RTView.GUI.Elements (TmpElements, pageTitle)
---import           Cardano.RTView.GUI.Markup.PageBody (mkPageBody)
+import           Cardano.Tracer.Handlers.RTView.UI.HTML.PageBody (mkPageBody)
 --import           Cardano.RTView.GUI.Updater (updateGUI)
 --import           Cardano.RTView.NodeState.Types (NodesState)
 --import           Cardano.RTView.Notifications.Types (NotificationSettings)
 
 import           Cardano.Tracer.Configuration
 -- import           Cardano.Tracer.Handlers.RTView.UI.CSS.Own (ownCSS)
-import           Cardano.Tracer.Handlers.RTView.UI.CSS.W3C (w3CSS)
+import           Cardano.Tracer.Handlers.RTView.UI.CSS.Bulma (bulmaCSS)
 
 runWebServer :: Endpoint -> IO ()
 runWebServer (Endpoint host port) = UI.startGUI config mainPage
@@ -35,8 +35,10 @@ runWebServer (Endpoint host port) = UI.startGUI config mainPage
 mainPage :: UI.Window -> UI ()
 mainPage window = do
   void $ return window # set UI.title "RTView" -- pageTitle
-  embedCSS window w3CSS
+  embedCSS window bulmaCSS
   -- embedCSS window ownCSS
+  pageBody <- mkPageBody window
+  void $ UI.element pageBody
 
 embedCSS :: UI.Window -> String -> UI ()
 embedCSS window css = void $ do

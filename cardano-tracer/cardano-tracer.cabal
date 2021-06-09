@@ -52,7 +52,8 @@ library
                        Cardano.Tracer.Handlers.Metrics.Run
 
                        Cardano.Tracer.Handlers.RTView.Run
-                       Cardano.Tracer.Handlers.RTView.UI.CSS.W3C
+                       Cardano.Tracer.Handlers.RTView.UI.CSS.Bulma
+                       Cardano.Tracer.Handlers.RTView.UI.HTML.PageBody
                        Cardano.Tracer.Handlers.RTView.WebServer
 
   other-modules:       Paths_cardano_tracer

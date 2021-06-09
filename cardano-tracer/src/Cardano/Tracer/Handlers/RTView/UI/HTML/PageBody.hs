@@ -1,8 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Cardano.RTView.GUI.Markup.PageBody
-    ( mkPageBody
-    ) where
+module Cardano.Tracer.Handlers.RTView.UI.HTML.PageBody
+  ( mkPageBody
+  ) where
+
+import qualified Graphics.UI.Threepenny as UI
+import           Graphics.UI.Threepenny.Core (Element, UI, element, set, string, (#), (#+))
+
+mkPageBody :: UI.Window -> UI Element
+mkPageBody window = do
+  undefined
+  --body <- UI.getBody window #+
+  --  [ topNavigation window -- acceptors config params notifyTVar allNodesSelectors
+  --  , element paneNodesRootElem
+  --  ]
+  --return body
+
+{-
 
 import           Control.Concurrent.STM.TVar (TVar)
 import           Control.Monad (forM, forM_, void, when)
@@ -346,3 +360,4 @@ mkButton anId classes icon label =
     [ UI.img #. [ShowHideIcon] # set UI.src ("/static/images/" <> icon)
     , string label
     ]
+    -}
