@@ -114,7 +114,8 @@ forwardTracer config = do
       pure ()
     output _ lk (Just c@Document {}) (FormattedForwarder lo) = do
       case toHuman lo of
-        Just hr -> docIt (Stdout HumanFormat) (FormattedHuman "") (lk, Just c, hr)
+        Just hr -> docIt (Stdout HumanFormatUncoloured)
+                         (FormattedHuman False "") (lk, Just c, hr)
         Nothing -> pure ()
       case toMachine lo of
         Just mr -> docIt (Stdout MachineFormat) (FormattedMachine "") (lk, Just c, mr)

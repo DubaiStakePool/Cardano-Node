@@ -49,7 +49,7 @@ standardTracer mbFilePath = do
       -> Maybe TraceControl
       -> FormattedMessage
       -> m ()
-    output stateRef LoggingContext {} Nothing (FormattedHuman msg) = liftIO $ do
+    output stateRef LoggingContext {} Nothing (FormattedHuman _c msg) = liftIO $ do
       st  <- readIORef stateRef
       case stRunning st of
         Just (inChannel, _, _) -> writeChan inChannel msg
@@ -64,8 +64,11 @@ standardTracer mbFilePath = do
       case stRunning st of
         Nothing -> initLogging stateRef
         Just _  -> pure ()
-    output _ lk (Just c@Document {}) (FormattedHuman msg) =
-       docIt (Stdout HumanFormat) (FormattedHuman "") (lk, Just c, msg)
+    output _ lk (Just c@Document {}) (FormattedHuman co msg) =
+       docIt
+        (Stdout (if co then HumanFormatColoured else HumanFormatUncoloured))
+        (FormattedHuman co "")
+        (lk, Just c, msg)
     output _ lk (Just c@Document {}) (FormattedMachine msg) =
        docIt (Stdout MachineFormat) (FormattedMachine "") (lk, Just c, msg)
     output _stateRef LoggingContext {} _ _a = pure ()

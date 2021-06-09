@@ -275,7 +275,7 @@ TraceOptionDetail:
 TraceOptionBackend:
   - ns: ''
     backends:
-    - Stdout HumanFormat
+    - Stdout HumanFormatCoulored
     - Forwarder
     - EKGBackend
   - ns: Cardano.Node.ChainDB
@@ -285,4 +285,3 @@ TraceOptionForwarder:
   host: "127.0.0.1"
   port: 3010
 TraceOptionForwardCache: 780
-  

@@ -64,7 +64,7 @@ instance AE.FromJSON TraceOptionDetail where
 
 data TraceOptionBackend = TraceOptionBackend {
       nsB      :: Text
-    , backends :: [Backend]
+    , backends :: [BackendConfig]
     } deriving (Eq, Ord, Show, Generic)
 
 instance AE.ToJSON TraceOptionBackend where
@@ -255,7 +255,7 @@ withDetailsFromConfig =
 
 -- | Routing and formatting of a trace from the config
 withBackendsAndFormattingFromConfig :: (MonadIO m) =>
-  (Maybe [Backend] -> Trace m FormattedMessage -> m (Trace m a))
+  (Maybe [BackendConfig] -> Trace m FormattedMessage -> m (Trace m a))
   -> m (Trace m a)
 withBackendsAndFormattingFromConfig routerAndFormatter =
   withNamespaceConfig
@@ -285,13 +285,13 @@ getDetails config context =
     detailSelector _            = Nothing
 
 -- | If no backends can be found in the config, it is set to
--- [EKGBackend, Forwarder, Stdout HumanFormat]
-getBackends :: TraceConfig -> Namespace -> [Backend]
+-- [EKGBackend, Forwarder, Stdout HumanFormatColoured]
+getBackends :: TraceConfig -> Namespace -> [BackendConfig]
 getBackends config context =
-    fromMaybe [EKGBackend, Forwarder, Stdout HumanFormat]
+    fromMaybe [EKGBackend, Forwarder, Stdout HumanFormatColoured]
       (getOption backendSelector config context)
   where
-    backendSelector :: ConfigOption -> Maybe [Backend]
+    backendSelector :: ConfigOption -> Maybe [BackendConfig]
     backendSelector (CoBackend s) = Just s
     backendSelector _             = Nothing
 

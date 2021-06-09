@@ -27,7 +27,7 @@
     {
       "ns": "",
       "backends": [
-        "Stdout HumanFormat",
+        "Stdout HumanFormatColoured",
         "Forwarder",
         "EKGBackend"
       ]

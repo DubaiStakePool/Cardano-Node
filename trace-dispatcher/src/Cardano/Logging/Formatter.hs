@@ -133,11 +133,11 @@ humanFormatter withColor application (Trace tr) = do
           text <- liftIO $ formatContextHuman withColor hn application lc fh
           T.traceWith tr (lc { lcNamespace = application : lcNamespace lc}
                              , Nothing
-                             , FormattedHuman text)
+                             , FormattedHuman withColor text)
         (lc, Just ctrl, _v) -> do
           T.traceWith tr (lc { lcNamespace = application : lcNamespace lc}
                              , Just ctrl
-                             , FormattedHuman "")
+                             , FormattedHuman withColor "")
 
 formatContextHuman ::
      Bool

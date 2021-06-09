@@ -24,7 +24,7 @@ module Cardano.Logging.Types (
   , SeverityF(..)
   , ConfigOption(..)
   , RemoteAddr(..)
-  , Format(..)
+  , LogFormat(..)
   , TraceConfig(..)
   , emptyTraceConfig
   , FormattedMessage(..)
@@ -32,7 +32,7 @@ module Cardano.Logging.Types (
   , DocCollector(..)
   , LogDoc(..)
   , emptyLogDoc
-  , Backend(..)
+  , BackendConfig(..)
   , Folding(..)
   , TraceObject(..)
 ) where
@@ -197,31 +197,35 @@ data TraceObject = TraceObject {
 } deriving (Eq, Show)
 
 data FormattedMessage =
-      FormattedHuman Text
+      FormattedHuman Bool Text
+      -- ^ The bool specifies if the formatting includes colours  
     | FormattedMachine Text
     | FormattedMetrics [Metric]
     | FormattedForwarder TraceObject
   deriving (Eq, Show)
 
-data Backend =
+data BackendConfig =
     Forwarder
-  | Stdout Format
+  | Stdout LogFormat
   | EKGBackend
   deriving (Eq, Ord, Show, Generic)
 
-instance AE.ToJSON Backend where
+instance AE.ToJSON BackendConfig where
   toJSON Forwarder  = AE.String "Forwarder"
   toJSON EKGBackend = AE.String "EKGBackend"
   toJSON (Stdout f) = AE.String $ "Stdout " <> (pack . show) f
 
-instance AE.FromJSON Backend where
+instance AE.FromJSON BackendConfig where
   parseJSON (AE.String "Forwarder")            = pure Forwarder
   parseJSON (AE.String "EKGBackend")           = pure EKGBackend
-  parseJSON (AE.String "Stdout HumanFormat")   = pure $ Stdout HumanFormat
+  parseJSON (AE.String "Stdout HumanFormatColoured")
+                                               = pure $ Stdout HumanFormatColoured
+  parseJSON (AE.String "Stdout HumanFormatUncoloured")
+                                               = pure $ Stdout HumanFormatUncoloured
   parseJSON (AE.String "Stdout MachineFormat") = pure $ Stdout MachineFormat
   parseJSON other                              = error (show other)
 
-data Format = HumanFormat | MachineFormat
+data LogFormat = HumanFormatColoured | HumanFormatUncoloured | MachineFormat
   deriving (Eq, Ord, Show)
 
 -- Configuration options for individual namespace elements
@@ -231,7 +235,7 @@ data ConfigOption =
     -- | Detail level (Default is DRegular)
   | CoDetail DetailLevel
   -- | To which backend to pass (Default is BothBackends)
-  | CoBackend [Backend]
+  | CoBackend [BackendConfig]
   deriving (Eq, Ord, Show)
 
 data RemoteAddr
@@ -277,7 +281,7 @@ data LogDoc = LogDoc {
   , ldSeverity  :: [SeverityS]
   , ldPrivacy   :: [Privacy]
   , ldDetails   :: [DetailLevel]
-  , ldBackends  :: [(Backend, FormattedMessage)]
+  , ldBackends  :: [(BackendConfig, FormattedMessage)]
 --  , ldConfSeverity :: SeverityF
 --  , ldConfPrivacy  :: Privacy
 } deriving(Eq, Show)

@@ -12,7 +12,7 @@ To add in node-services.nix
                ];
 
                TraceOptionBackend = [
-                 {ns = ""; backends = ["Stdout HumanFormat"; "Forwarder"; "EKGBackend"];}
+                 {ns = ""; backends = ["Stdout HumanFormatColoured"; "Forwarder"; "EKGBackend"];}
                  {ns = "Cardano.Node.ChainDB"; backends = ["Forwarder"];}
                ];
                TraceOptionForwarder = {host: "loopback"; port: 46};

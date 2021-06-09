@@ -146,13 +146,13 @@ mkCardanoTracer name namesFor severityFor privacyFor
                   $ withPrivacy privacyFor
                     tr''
     routeAndFormat ::
-         Maybe [Backend]
+         Maybe [BackendConfig]
       -> Trace m x
       -> IO (Trace IO evt)
     routeAndFormat mbBackends _ =
       let backends = case mbBackends of
                         Just b -> b
-                        Nothing -> [EKGBackend, Forwarder, Stdout HumanFormat]
+                        Nothing -> [EKGBackend, Forwarder, Stdout HumanFormatColoured]
       in do
         mbEkgTrace     <- case mbTrEkg of
                             Nothing -> pure Nothing
@@ -165,13 +165,16 @@ mkCardanoTracer name namesFor severityFor privacyFor
                             then liftM (Just . filterTraceByPrivacy (Just Public))
                                   (forwardFormatter "Cardano" trForward)
                             else pure Nothing
-        mbStdoutTrace  <-  if elem (Stdout HumanFormat) backends
+        mbStdoutTrace  <-  if elem (Stdout HumanFormatColoured) backends
                             then liftM Just
                                 (humanFormatter True "Cardano" trStdout)
-                            else if elem (Stdout MachineFormat) backends
+                            else if elem (Stdout HumanFormatUncoloured) backends
                               then liftM Just
-                                (machineFormatter "Cardano" trStdout)
-                              else pure Nothing
+                                  (humanFormatter False "Cardano" trStdout)
+                              else if elem (Stdout MachineFormat) backends
+                                then liftM Just
+                                  (machineFormatter "Cardano" trStdout)
+                                else pure Nothing
         case mbEkgTrace <> mbForwardTrace <> mbStdoutTrace of
           Nothing -> pure $ Trace NT.nullTracer
           Just tr -> pure tr

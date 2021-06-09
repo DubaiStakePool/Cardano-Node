@@ -38,7 +38,7 @@ documentTracers (Documented documented) tracers = do
         docIdx
 
 docIt :: MonadIO m =>
-     Backend
+     BackendConfig
   -> FormattedMessage
   -> (LoggingContext, Maybe TraceControl, a)
   -> m ()
@@ -181,19 +181,19 @@ documentMarkdown (Documented documented) tracers = do
                   <> mconcat (intersperse (singleton ',')
                         (map (asCode . fromString . show) l))
 
-    backendsBuilder :: [(Backend, FormattedMessage)] -> Builder
+    backendsBuilder :: [(BackendConfig, FormattedMessage)] -> Builder
     backendsBuilder [] = fromText "No backends found"
     backendsBuilder l  = fromText "Backends: "
                           <> mconcat (intersperse (fromText ", ")
                                 (map backendFormatToText l))
 
-    backendFormatToText :: (Backend, FormattedMessage) -> Builder
+    backendFormatToText :: (BackendConfig, FormattedMessage) -> Builder
     backendFormatToText (be, FormattedMetrics _) = asCode (fromString (show be))
                             <> fromText " / "
                             <> asCode "Metrics"
-    backendFormatToText (be, FormattedHuman _) = asCode (fromString (show be))
+    backendFormatToText (be, FormattedHuman c _) = asCode (fromString (show be))
                             <> fromText " / "
-                            <> asCode "Human"
+                            <> asCode ("Human" <> if c then "coloured" else "") 
     backendFormatToText (be, FormattedMachine _) = asCode (fromString (show be))
                             <> fromText " / "
                             <> asCode "Machine"
