@@ -80,7 +80,7 @@ propRotator host port = ioProperty $ do
           }
     }
 
-  format = AsText
+  format = ForHuman
 
   false :: String -> IO Property
   false msg = return . counterexample msg $ property False

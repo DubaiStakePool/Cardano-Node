@@ -27,8 +27,8 @@ logPrefix :: String
 logPrefix = "node-"
 
 logExtension :: LogFormat -> String
-logExtension AsText = ".log"
-logExtension AsJSON = ".json"
+logExtension ForHuman   = ".log"
+logExtension ForMachine = ".json"
 
 symLinkName :: LogFormat -> FilePath
 symLinkName format = "node" <.> logExtension format

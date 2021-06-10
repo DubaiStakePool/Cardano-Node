@@ -45,8 +45,8 @@ data LogMode
   deriving (Eq, Generic, FromJSON, Show, ToJSON)
 
 data LogFormat
-  = AsText
-  | AsJSON
+  = ForHuman
+  | ForMachine
   deriving (Eq, Generic, FromJSON, Show, ToJSON)
 
 data LoggingParams = LoggingParams

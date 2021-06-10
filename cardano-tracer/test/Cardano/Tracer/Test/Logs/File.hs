@@ -23,8 +23,8 @@ import           Cardano.Tracer.Test.Forwarder (launchForwardersSimple)
 
 tests :: TestTree
 tests = localOption (QuickCheckTests 1) $ testGroup "Test.Logs.File"
-  [ testProperty ".log"  $ propFile AsText "text" "127.0.0.1" 3000
-  , testProperty ".json" $ propFile AsJSON "json" "127.0.0.1" 3010
+  [ testProperty ".log"  $ propFile ForHuman   "text" "127.0.0.1" 3000
+  , testProperty ".json" $ propFile ForMachine "json" "127.0.0.1" 3010
   ]
 
 propFile

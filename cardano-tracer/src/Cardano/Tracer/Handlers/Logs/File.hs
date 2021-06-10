@@ -58,8 +58,8 @@ writeTraceObjectsToFile nodeId nodeName rootDir format traceObjects = do
   -- This is a symlink to the current log file, please see rotation parameters.
   pathToCurrentLog = subDirForLogs </> symLinkName format
 
-  formatter AsText = traceObjectToText
-  formatter AsJSON = traceObjectToJSON
+  formatter ForHuman   = traceObjectToText
+  formatter ForMachine = traceObjectToJSON
 
   writeTraceObjects logPath formatIt =
     -- It's much more efficiently to encode 'Text' explicitly and

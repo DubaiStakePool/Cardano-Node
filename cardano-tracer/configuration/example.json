@@ -17,7 +17,7 @@
     {
       "logRoot": "/tmp/cardano-tracer-logs",
       "logMode": "FileMode",
-      "logFormat": "AsJSON"
+      "logFormat": "ForMachine"
     }
   ],
   "rotation": {
