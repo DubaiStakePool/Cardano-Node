@@ -37,6 +37,8 @@ mainPage window = do
   void $ return window # set UI.title "RTView" -- pageTitle
   embedCSS window bulmaCSS
   -- embedCSS window ownCSS
+  UI.meta # set UI.name "viewport"
+          # set UI.content "width=device-width, initial-scale=1"
   pageBody <- mkPageBody window
   void $ UI.element pageBody
 
