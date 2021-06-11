@@ -74,6 +74,10 @@ let
                  {ns = "Node.ChainDB"; backends = ["Forwarder"];}
                ];
 
+               TraceOptionLimiter = [
+                 {ns = "Cardano.Node.Resources"; limiterName = "Resource limiter"; limiterFrequency = 0.1;}
+               ];
+
                TraceOptionForwarder = {host = "127.0.0.1"; port = 3010;};
 
                TraceOptionForwardCache = 700;

@@ -105,6 +105,8 @@ import           Ouroboros.Network.TxSubmission.Inbound
 import           Ouroboros.Network.TxSubmission.Outbound
                      (TraceTxSubmissionOutbound)
 
+import           Debug.Trace
+
 type Peer = NtN.ConnectionId Socket.SockAddr
 
 -- | Construct a tracer according to the requirements for cardano node.
@@ -118,8 +120,7 @@ type Peer = NtN.ConnectionId Socket.SockAddr
 -- as arguments.
 --
 -- The returned tracer need to be configured for the specification of
--- filtering, detailLevel, and backends with formatting before use.
-
+-- filtering, detailLevel, frequencyLimiting and backends with formatting before use.
 mkCardanoTracer :: forall evt.
      LogFormatting evt
   => Text
@@ -132,8 +133,10 @@ mkCardanoTracer :: forall evt.
   -> IO (Trace IO evt)
 mkCardanoTracer name namesFor severityFor privacyFor
   trStdout trForward mbTrEkg = do
-    tr <- withBackendsAndFormattingFromConfig routeAndFormat
-    addContextAndFilter tr
+    tr  <- withBackendsFromConfig routeAndFormat
+    trl <- withBackendsFromConfig routeAndFormatLimiter
+    tr' <- withLimitersFromConfig tr trl
+    addContextAndFilter tr'
   where
     addContextAndFilter :: Trace IO evt -> IO (Trace IO evt)
     addContextAndFilter t = do
@@ -179,6 +182,33 @@ mkCardanoTracer name namesFor severityFor privacyFor
           Nothing -> pure $ Trace NT.nullTracer
           Just tr -> pure tr
 
+    routeAndFormatLimiter ::
+         Maybe [BackendConfig]
+      -> Trace m x
+      -> IO (Trace IO LimitingMessage)
+    routeAndFormatLimiter mbBackends _ =
+      let backends = case mbBackends of
+                        Just b -> b
+                        Nothing -> [Forwarder, Stdout HumanFormatColoured]
+      in do
+        mbForwardTrace <- if elem Forwarder backends
+                            then liftM Just
+                                    (forwardFormatter "Cardano" trForward)
+                            else pure Nothing
+        mbStdoutTrace  <-  if elem (Stdout HumanFormatColoured) backends
+                            then liftM Just
+                                (humanFormatter True "Cardano" trStdout)
+                            else if elem (Stdout HumanFormatUncoloured) backends
+                              then liftM Just
+                                  (humanFormatter False "Cardano" trStdout)
+                              else if elem (Stdout MachineFormat) backends
+                                then liftM Just
+                                  (machineFormatter "Cardano" trStdout)
+                                else pure Nothing
+        case mbForwardTrace <> mbStdoutTrace of
+          Nothing -> pure $ Trace NT.nullTracer
+          Just tr -> pure tr
+
 mkStandardTracerSimple ::
      LogFormatting evt
   => Text
@@ -220,6 +250,7 @@ mkDispatchTracers
   -> IO (Tracers peer localPeer blk)
 mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
   trBase trForward mbTrEKG trConfig = do
+    trace ("TraceConfig " <> show trConfig) $ pure ()
     cdbmTr <- mkCardanoTracer
                 "ChainDB"
                 namesForChainDBTraceEvents

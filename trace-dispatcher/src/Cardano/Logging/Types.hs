@@ -127,7 +127,7 @@ data DocMsg a = DocMsg {
 -- A unique identifier for every message, composed of text
 type Namespace = [Text]
 
--- | Context of a message
+-- | Context any log message carries
 data LoggingContext = LoggingContext {
     lcNamespace :: Namespace
   , lcSeverity  :: Maybe SeverityS
@@ -184,7 +184,7 @@ instance AE.ToJSON SeverityF where
     toEncoding = AE.genericToEncoding AE.defaultOptions
 instance AE.FromJSON SeverityF
 
--- | Used for ForwarderTracer
+-- | Used as interface object for ForwarderTracer
 data TraceObject = TraceObject {
     toHuman     :: Maybe Text
   , toMachine   :: Maybe Text
@@ -196,6 +196,7 @@ data TraceObject = TraceObject {
   , toThreadId  :: Text
 } deriving (Eq, Show)
 
+-- |
 data FormattedMessage =
       FormattedHuman Bool Text
       -- ^ The bool specifies if the formatting includes colours
@@ -204,6 +205,7 @@ data FormattedMessage =
     | FormattedForwarder TraceObject
   deriving (Eq, Show)
 
+-- |
 data BackendConfig =
     Forwarder
   | Stdout FormatLogging
@@ -236,6 +238,9 @@ data ConfigOption =
   | CoDetail DetailLevel
   -- | To which backend to pass (Default is BothBackends)
   | CoBackend [BackendConfig]
+  -- | Construct a limiter with name (Text) and limiting to Double
+  -- number of messages per second
+  | CoLimiter Text Double
   deriving (Eq, Ord, Show)
 
 data RemoteAddr

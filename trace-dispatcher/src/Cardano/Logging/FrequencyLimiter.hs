@@ -4,19 +4,26 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Logging.FrequencyLimiter (
-  limitFrequency,
-  LimitingMessage(..)
+    limitFrequency
+  , LimitingMessage(..)
+  , LimiterSpec (..)
 )where
 
 import           Control.Monad.IO.Unlift
 import qualified Control.Tracer as T
-import           Data.Aeson ((.=), Value(..))
+import           Data.Aeson (Value (..), (.=))
 import           Data.Text (Text, pack)
 import           Data.Time.Clock.System
 import           GHC.Generics
 
 import           Cardano.Logging.Trace
 import           Cardano.Logging.Types
+
+data LimiterSpec = LimiterSpec {
+    lsNs        :: [Text]
+  , lsName      :: Text
+  , lsFrequency :: Double
+}
 
 data LimitingMessage =
     StartLimiting Text
@@ -42,7 +49,6 @@ instance LogFormatting LimitingMessage where
   asMetrics (StartLimiting _txt) = []
   asMetrics (StopLimiting txt num) = [IntM (Just ("SuppressedMessages " <> txt))
                                         (fromIntegral num)]
-
 
 data FrequencyRec a = FrequencyRec {
     frMessage  :: Maybe a   -- ^ The message to pass

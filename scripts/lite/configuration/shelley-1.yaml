@@ -281,6 +281,10 @@ TraceOptionBackend:
   - ns: Cardano.Node.ChainDB
     backends:
     - Forwarder
+TraceOptionLimiter:
+  - ns: Cardano.Node.Resources
+    limiterName: ResourceLimiter
+    limiterFrequency: 1.0
 TraceOptionForwarder:
   host: "127.0.0.1"
   port: 3000
