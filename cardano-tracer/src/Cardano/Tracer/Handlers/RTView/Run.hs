@@ -22,6 +22,8 @@ runRTView endpoint acceptedItems = do
   -- This TVar contains state (info, metrics) for all nodes we receive metrics from.
   -- nsTVar :: TVar NodesState <- newTVarIO =<< initialNodesState config
 
+  -- pageElsTVar :: TVar PageElements <- newTVarIO HM.empty 
+
   serverThr <- async $ runWebServer endpoint
 
   void $ waitAnyCancel [serverThr]

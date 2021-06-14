@@ -21,7 +21,7 @@ import           Cardano.Tracer.Handlers.RTView.UI.HTML.PageBody (mkPageBody)
 --import           Cardano.RTView.Notifications.Types (NotificationSettings)
 
 import           Cardano.Tracer.Configuration
--- import           Cardano.Tracer.Handlers.RTView.UI.CSS.Own (ownCSS)
+import           Cardano.Tracer.Handlers.RTView.UI.CSS.Own (ownCSS)
 import           Cardano.Tracer.Handlers.RTView.UI.CSS.Bulma (bulmaCSS)
 
 runWebServer :: Endpoint -> IO ()
@@ -32,20 +32,16 @@ runWebServer (Endpoint host port) = UI.startGUI config mainPage
     , UI.jsAddr = Just $ BSC.pack host
     }
 
-mainPage :: UI.Window -> UI ()
-mainPage window = do
-  void $ return window # set UI.title "RTView" -- pageTitle
-  embedCSS window bulmaCSS
-  -- embedCSS window ownCSS
-  UI.meta # set UI.name "viewport"
-          # set UI.content "width=device-width, initial-scale=1"
-  pageBody <- mkPageBody window
-  void $ UI.element pageBody
-
-embedCSS :: UI.Window -> String -> UI ()
-embedCSS window css = void $ do
-  el <- UI.mkElement "style" # set UI.html css
-  UI.getHead window #+ [UI.element el]
+  mainPage window = do
+    void $ return window # set UI.title "RTView" -- pageTitle
+    void $ UI.getHead window #+
+      [ UI.link # set UI.rel "icon" # set UI.href "data:,"
+      , UI.meta # set UI.name "viewport" # set UI.content "width=device-width, initial-scale=1"
+      , UI.mkElement "style" # set UI.html bulmaCSS
+      , UI.mkElement "style" # set UI.html ownCSS
+      -- , UI.mkElement "script" # set UI.html chartJS
+      ]
+    void $ mkPageBody window
 
   {-
 mainPage

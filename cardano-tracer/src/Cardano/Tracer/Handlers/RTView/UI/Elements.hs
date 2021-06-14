@@ -1,27 +1,44 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Cardano.RTView.GUI.Elements
-    ( HTMLClass (..)
-    , HTMLId (..)
-    , NodesStateElements
-    , NodeStateElements
-    , ElementName (..)
-    , ElementValue (..)
-    , PeerInfoItem (..)
-    , PeerInfoElements (..)
-    , TmpElements
-    , initialTmpElements
-    , (#.)
-    , (##)
-    , dataAttr
-    , showIt
-    , showInline
-    , hideIt
-    , pageTitle
-    , pageTitleNotify
-    ) where
+module Cardano.Tracer.Handlers.RTView.UI.Elements
+  ( PageElements
+    {-
+  HTMLClass (..)
+  , HTMLId (..)
+  , NodesStateElements
+  , NodeStateElements
+  , ElementName (..)
+  , ElementValue (..)
+  , PeerInfoItem (..)
+  , PeerInfoElements (..)
+  , TmpElements
+  , initialTmpElements
+  , (#.)
+  , (##)
+  , dataAttr
+  , showIt
+  , showInline
+  , hideIt
+  , pageTitle
+  , pageTitleNotify
+  -}
+  ) where
 
+import           Graphics.UI.Threepenny.Core (Element, UI, (#))
+import qualified Data.HashMap.Strict as HM
+import           Data.HashMap.Strict (HashMap)
+import           Data.Text (Text)
+
+type TraceObjectName = Text
+
+type NodeFullId = Text
+
+type NodePanelElements = HashMap TraceObjectName Element
+
+type PageElements = HashMap NodeFullId NodePanelElements
+
+  {-
 import           Control.DeepSeq (NFData (..), rwhnf)
 import           Data.Hashable (Hashable)
 import           GHC.Generics (Generic)
@@ -500,3 +517,4 @@ dataAttr name = UI.mkReadWriteAttr getData setData
  where
   getData   el = UI.callFunction $ UI.ffi "$(%1).data(%2)" el name
   setData v el = UI.runFunction  $ UI.ffi "$(%1).data(%2,%3)" el name v
+  -}

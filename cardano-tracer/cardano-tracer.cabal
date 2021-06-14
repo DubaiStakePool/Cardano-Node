@@ -52,8 +52,13 @@ library
                        Cardano.Tracer.Handlers.Metrics.Run
 
                        Cardano.Tracer.Handlers.RTView.Run
+                       Cardano.Tracer.Handlers.RTView.SupportedNodes
+                       Cardano.Tracer.Handlers.RTView.UI.Elements
                        Cardano.Tracer.Handlers.RTView.UI.CSS.Bulma
+                       Cardano.Tracer.Handlers.RTView.UI.CSS.Own
+                       Cardano.Tracer.Handlers.RTView.UI.HTML.OwnInfo
                        Cardano.Tracer.Handlers.RTView.UI.HTML.PageBody
+                       Cardano.Tracer.Handlers.RTView.UI.Img.Icons
                        Cardano.Tracer.Handlers.RTView.WebServer
 
   other-modules:       Paths_cardano_tracer
@@ -64,6 +69,7 @@ library
                        , blaze-markup
                        , bytestring
                        , cborg
+                       , clay
                        , containers
                        , contra-tracer
                        , directory

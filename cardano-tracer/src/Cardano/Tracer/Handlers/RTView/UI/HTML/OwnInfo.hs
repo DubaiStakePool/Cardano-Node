@@ -2,23 +2,21 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Cardano.RTView.GUI.Markup.OwnInfo
+module Cardano.Tracer.Handlers.RTView.UI.HTML.OwnInfo
     ( mkOwnInfo
     ) where
 
 import           Control.Monad (forM, void)
-import           Data.List (find, intersperse)
 import qualified Data.Text as T
 import           Data.Version (showVersion)
 import           System.FilePath.Posix (takeDirectory)
 
 import qualified Graphics.UI.Threepenny as UI
-import           Graphics.UI.Threepenny.Core (Element, UI, element, liftIO, set, string, (#), (#+))
+import           Graphics.UI.Threepenny.Core (Element, UI, element, liftIO, set, string, text, (#), (#+), (#.))
 
-import           Cardano.BM.Configuration (Configuration)
-import qualified Cardano.BM.Configuration.Model as CM
-import           Cardano.BM.Data.Output (ScribeDefinition (..), ScribeKind (..))
+import           Cardano.Tracer.Handlers.RTView.UI.Img.Icons
 
+{-
 import           Cardano.RTView.CLI (RTViewParams (..))
 import           Cardano.RTView.Config (configFileIsProvided, notificationsFileIsProvided,
                                         logFilesDir, savedConfigurationFile,
@@ -28,12 +26,62 @@ import           Cardano.RTView.GUI.JS.Utils (copyTextToClipboard)
 import           Cardano.RTView.Git.Rev (gitRev)
 import           Cardano.RTView.SupportedNodes (supportedNodesVersions)
 import           Paths_cardano_rt_view (version)
+-}
 
-mkOwnInfo
+mkOwnInfo :: Element -> UI Element
+mkOwnInfo closeIt =
+  UI.div #. "modal" #+
+    [ UI.div #. "modal-background" #+ []
+    , UI.div #. "modal-content" #+
+        [ UI.div #. "container" #+
+            [ UI.div #. "box" #+
+                [ UI.div #. "columns" #+
+                    [ UI.div #. "column has-text-right" #+
+                        [ UI.p #. "mb-1" #+ [ string "Version"
+                                            , image "rt-view-what-icon" questionSVG
+                                                    # set UI.title__ "Version of cardano-tracer RTView is a part of"
+                                            ]
+                        , UI.p #. "mb-1" #+ [ string "Commit"
+                                            , image "rt-view-what-icon" questionSVG
+                                                    # set UI.title__ "Git commit cardano-tracer was built from"
+                                            ]
+                        , UI.p #. "mb-1" #+ [ string "Platform"
+                                            , image "rt-view-what-icon" questionSVG
+                                                    # set UI.title__ "Platform cardano-tracer is running on"
+                                            ]
+                        , UI.p           #+ [ string "Supported nodes"
+                                            , image "rt-view-what-icon" questionSVG
+                                                    # set UI.title__ "Versions of the nodes RTView was tested with"
+                                            ]
+                        ]
+                    , UI.div #. "column has-text-weight-semibold" #+
+                        [ UI.p #. "mb-1" #+ [string "1.0"]
+                        , UI.p #. "mb-1" #+ [string "abcdefg"]
+                        , UI.p #. "mb-1" #+ [string "Linux"]
+                        , UI.div #. "tags are-medium" #+
+                            [ UI.span #. "tag is-link" # set text "1.27.0"
+                            , UI.span #. "tag is-link" # set text "1.28.0"
+                            , UI.span #. "tag is-link" # set text "1.29.0"
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    , element closeIt
+    ]
+ where
+  image imgClass svg = UI.span #. imgClass # set UI.html svg
+
+
+
+
+  {-
+mkOwnInfo'
   :: Configuration
   -> RTViewParams
   -> UI Element
-mkOwnInfo config params = do
+mkOwnInfo' config params = do
   closeButton <- UI.img #. [W3DisplayTopright, RTViewInfoClose]
                         # set UI.src "/static/images/times.svg"
                         # set UI.title__ "Close"
@@ -190,3 +238,4 @@ preparePathIfNeeded aPath = if tooLongPath then shortenedPath else aPath
   tooLongPath = len > 20
   len = length aPath
   shortenedPath = take 10 aPath <> "..." <> drop (len - 10) aPath
+  -}

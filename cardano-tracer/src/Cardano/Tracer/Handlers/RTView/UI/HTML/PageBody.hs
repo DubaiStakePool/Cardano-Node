@@ -5,27 +5,220 @@ module Cardano.Tracer.Handlers.RTView.UI.HTML.PageBody
   ) where
 
 import qualified Graphics.UI.Threepenny as UI
-import           Graphics.UI.Threepenny.Core (Element, UI, element, set, string, (#), (#+), (#.))
+import           Graphics.UI.Threepenny.Core
+
+import           Cardano.Tracer.Handlers.RTView.UI.Img.Icons
+import           Cardano.Tracer.Handlers.RTView.UI.HTML.OwnInfo (mkOwnInfo)
 
 mkPageBody :: UI.Window -> UI Element
 mkPageBody window = do
+  --di <- image "rt-view-node-panel-down" downSVG
+  --on UI.click di $ const $ 
+
   body <- UI.getBody window #+
-    [ topNavigation window
+    [ topNavigation
     , UI.mkElement "section" #. "section" #+
-        [ UI.div #. "container" #+
-            [ UI.h1 #. "title" #+ [string "Hello guys!"]
+        [ UI.div #. "container is-max-widescreen" #+
+            [ UI.div #. "panel" #+
+                [ UI.p #. "panel-heading" #+
+                    [ UI.div #. "columns" #+
+                        [ UI.div #. "column" #+
+                            [ string "Node: core-1"
+                            ]
+                        , UI.div #. "column has-text-right" #+
+                            [ image "rt-view-node-panel-down" downSVG
+                            ]
+                        ]
+                    ]
+                , UI.p #. "panel-tabs is-size-5" #+
+                    [ UI.anchor #. "is-active" #+ [image "rt-view-node-tab-icon" overviewSVG,   string "Overview"]
+                    , UI.anchor                #+ [image "rt-view-node-tab-icon" kesSVG,        string "KES"]
+                    , UI.anchor                #+ [image "rt-view-node-tab-icon" peersSVG,      string "Peers"]
+                    , UI.anchor                #+ [image "rt-view-node-tab-icon" blockchainSVG, string "Blockchain"]
+                    , UI.anchor                #+ [image "rt-view-node-tab-icon" mempoolSVG,    string "Mempool"]
+                    , UI.anchor                #+ [image "rt-view-node-tab-icon" errorsSVG,     string "Errors"]
+                    , UI.anchor                #+ [image "rt-view-node-tab-icon" rtsGCSVG,      string "RTS GC"]
+                    ]
+                , UI.div #. "panel-block is-size-5 rt-view-node-panel-block" #+
+                    [ UI.div #. "columns is-variable is-2-mobile is-3-desktop is-5-widescreen rt-view-node-panel-cols" #+
+                        [ UI.div #. "column is-half has-text-right" #+
+                            [ UI.p #. "mb-1" #+ [ string "Node protocol" ]
+                            , UI.p #. "mb-1" #+ [ string "Node version" ]
+                            , UI.p #. "mb-1" #+ [ string "Node commit" ]
+                            , UI.p #. "mb-1" #+ [ string "Node platform" ]
+                            , UI.p #. "mb-1" #+ [ string "Node start time" ]
+                            , UI.p           #+ [ string "Node uptime" ]
+                            ]
+                        , UI.div #. "column is-half has-text-weight-semibold" #+
+                            [ UI.p #. "mb-1" #+ [image "rt-view-overview-icon" protocolSVG, string "Shelley"]
+                            , UI.p #. "mb-1" #+ [image "rt-view-overview-icon" versionSVG,  string "1.0"]
+                            , UI.p #. "mb-1" #+ [image "rt-view-overview-icon" commitSVG,   string "abcdefg"]
+                            , UI.p #. "mb-1" #+ [image "rt-view-overview-icon" linuxSVG,    string "Linux"]
+                            , UI.p #. "mb-1" #+ [image "rt-view-overview-icon" calendarSVG, string "2021-01-01 01:01:01 UTC"]
+                            , UI.p           #+ [image "rt-view-overview-icon" clockSVG,    string "00:11:05"]
+                            ]
+                        ]
+                    ]
+                ]
             ]
         ]
     ]
   return body
 
-topNavigation :: UI.Window -> UI Element
-topNavigation window = do
-  <nav class="navbar" role="navigation" aria-label="main navigation">
-  <div class="navbar-brand">
-    <a class="navbar-item" href="https://bulma.io">
-      <img src="https://bulma.io/images/bulma-logo.png" width="112" height="28">
-    </a>
+topNavigation :: UI Element
+topNavigation = do
+  closeInfo <- UI.button #. "modal-close is-large" #+ []
+  info <- mkOwnInfo closeInfo
+  rtViewInfoIcon <- image "rt-view-info-icon" rtViewInfoSVG # set UI.title__ "See RTView info"
+  on UI.click rtViewInfoIcon $ const $ element info #. "modal is-active"
+  on UI.click closeInfo      $ const $ element info #. "modal"
+
+  closeNotifications <- UI.button #. "modal-close is-large" #+ []
+  notifications <- mkOwnInfo closeNotifications
+  rtViewNotifyIcon <- image "rt-view-notify-icon" rtViewNotifySVG # set UI.title__ "RTView notifications"
+  on UI.click rtViewNotifyIcon   $ const $ element info #. "modal is-active"
+  on UI.click closeNotifications $ const $ element info #. "modal"
+
+  nodes <- UI.div #. "navbar-dropdown is-boxed" #+
+    [ UI.div #. "navbar-item" #+ [string "core-1"]
+    , UI.div #. "navbar-item" #+ [string "core-2"]
+    , UI.div #. "navbar-item" #+ [string "core-3"]
+    , UI.div #. "navbar-item" #+ [string "relay-3"]
+    , UI.div #. "navbar-item" #+ [string "relay-3"]
+    , UI.div #. "navbar-item" #+ [string "relay-3"]
+    ]
+
+  UI.div #. "navbar rt-view-top-bar" #+
+    [ element info
+    , element notifications
+    , UI.div #. "navbar-brand" #+
+        [ UI.div #. "navbar-item" #+
+            [ image "rt-view-cardano-logo" cardanoLogoSVG
+            , UI.span #. "rt-view-name" # set text "Node Real-time View"
+            ]
+        ]
+    , UI.div #. "navbar-menu" #+
+        [ UI.div #. "navbar-start" #+
+            [ --UI.div #. "navbar-item has-dropdown is-hoverable has-text-info-light" #+
+              --  [ string "Node"
+              --  , element nodes
+              --  ]
+            ]
+        , UI.div #. "navbar-end" #+
+            [ UI.div #. "navbar-item" #+
+                [ element rtViewNotifyIcon
+                ]
+            , UI.div #. "navbar-item" #+
+                [ element rtViewInfoIcon
+                , UI.span #. "mr-4" #+ []
+                ]
+            ]
+        ]
+    ]
+
+
+
+  {-
+  <div id="navbarExampleTransparentExample" class="navbar-menu">
+    <div class="navbar-start">
+      <div class="navbar-item has-dropdown is-hoverable">
+        <a class="navbar-link" href="https://bulma.io/documentation/overview/start/">
+          Docs
+        </a>
+        <div class="navbar-dropdown is-boxed">
+          <a class="navbar-item" href="https://bulma.io/documentation/overview/start/">
+            Overview
+          </a>
+          <a class="navbar-item" href="https://bulma.io/documentation/overview/modifiers/">
+            Modifiers
+          </a>
+          <a class="navbar-item" href="https://bulma.io/documentation/columns/basics/">
+            Columns
+          </a>
+          <a class="navbar-item" href="https://bulma.io/documentation/layout/container/">
+            Layout
+          </a>
+          <a class="navbar-item" href="https://bulma.io/documentation/form/general/">
+            Form
+          </a>
+          <hr class="navbar-divider">
+          <a class="navbar-item" href="https://bulma.io/documentation/elements/box/">
+            Elements
+          </a>
+          <a class="navbar-item is-active" href="https://bulma.io/documentation/components/breadcrumb/">
+            Components
+          </a>
+        </div>
+      </div>
+    </div>
+-}
+
+
+
+
+  {-
+      <div class="navbar-item has-dropdown is-hoverable">
+        <a class="navbar-link" href="https://bulma.io/documentation/overview/start/">
+          Docs
+        </a>
+        
+      </div>
+-}
+
+
+  {-
+  UI.div #. [W3Bar, W3Large, TopBar] #+
+    [ UI.anchor #. [W3BarItem, W3Mobile] # set UI.href "https://cardano.org/" #+
+        [ UI.img #. [CardanoLogo] # set UI.src "/static/images/cardano-logo.svg"
+        ]
+    , UI.div #. [W3DropdownHover, W3Mobile] #+
+        [ UI.button #. [W3Button] #+
+            [ string "Node"
+            , UI.img #. [TopNavDropdownIcon] # set UI.src "/static/images/dropdown-light.svg"
+            ]
+        , UI.div #. [W3DropdownContent, W3BarBlock, W3Card4] #+ nodesSelector
+        ]
+    , UI.div #. [W3DropdownHover, W3Mobile] #+
+        [ UI.button #. [W3Button] #+
+            [ string "Tab"
+            , UI.img #. [TopNavDropdownIcon] # set UI.src "/static/images/dropdown-light.svg"
+            ]
+        , UI.div #. [W3DropdownContent, W3BarBlock, W3Card4] #+ tabs
+        ]
+    , UI.div #. [W3DropdownHover, W3Mobile] #+
+        [ UI.button #. [W3Button] #+
+            [ string "Columns"
+            , UI.img #. [TopNavDropdownIcon] # set UI.src "/static/images/dropdown-light.svg"
+            ]
+        , UI.div #. [W3DropdownContent, W3BarBlock, W3Card4] #+
+            [ element nodesColumns1
+            , element nodesColumns2
+            , element nodesColumns3
+            ]
+        ]
+    , UI.span #. [W3BarItem, W3Mobile] #+
+        [ element rtViewInfoButton
+        , element rtViewInfo
+        ]
+    , UI.span #. [W3BarItem, W3Mobile] #+
+        [ element rtViewNotificationsButton
+        , element rtViewNotifications
+        ]
+    , UI.span #. [W3Right, W3HideMedium, W3HideSmall, ServiceName] #+
+        [ string "Cardano Node Real-time View"
+        ]
+    ]
+-}
+
+
+
+
+
+
+image :: String -> String -> UI Element
+image imgClass svg = UI.span #. imgClass # set UI.html svg
+
+  {-
 
     <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarBasicExample">
       <span aria-hidden="true"></span>
@@ -81,6 +274,7 @@ topNavigation window = do
     </div>
   </div>
 </nav>
+-}
 
   {-
   UI.div #. [W3Bar, W3Large, TopBar] #+
