@@ -60,6 +60,7 @@ let
                TraceOptionSeverity  = [
                  {ns = ""; severity = "InfoF";}
                  {ns = "Node.AcceptPolicy"; severity = "SilenceF";}
+                 {ns = "Node.Mempool"; severity = "DebugF";}
                  {ns = "Node.ChainDB"; severity = "DebugF";}
                  {ns = "Node.ChainDB.ImmutableDBEvent"; severity = "WarningF";}
                ];
@@ -75,7 +76,7 @@ let
                ];
 
                TraceOptionLimiter = [
-                 {ns = "Cardano.Node.Resources"; limiterName = "Resource limiter"; limiterFrequency = 0.1;}
+                 {ns = "Node.ChainSyncNode"; limiterName = "ChainSync limiter"; limiterFrequency = 1;}
                ];
 
                TraceOptionForwarder = {host = "127.0.0.1"; port = 3010;};

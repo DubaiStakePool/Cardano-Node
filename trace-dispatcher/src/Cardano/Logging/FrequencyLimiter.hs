@@ -19,6 +19,8 @@ import           GHC.Generics
 import           Cardano.Logging.Trace
 import           Cardano.Logging.Types
 
+-- import           Debug.Trace
+
 data LimiterSpec = LimiterSpec {
     lsNs        :: [Text]
   , lsName      :: Text
@@ -85,18 +87,16 @@ limitFrequency
   -> m (Trace m a) -- the original trace
 limitFrequency thresholdFrequency limiterName vtracer ltracer = do
     timeNow <- systemTimeToSeconds <$> liftIO getSystemTime
+--    trace ("limitFrequency called " <> unpack limiterName) $ pure ()
     foldMTraceM
-      (cata (1.0 / thresholdFrequency))
+      (checkLimiting (1.0 / thresholdFrequency))
       (FrequencyRec Nothing  timeNow 0.0 Nothing)
-      (Trace $ T.contramap prepare (unpackTrace (filterTraceMaybe vtracer)))
+      (Trace $ T.contramap unfoldTrace (unpackTrace (filterTraceMaybe vtracer)))
   where
-    prepare ::
-         (LoggingContext, Maybe TraceControl, Folding a (FrequencyRec a))
-      -> (LoggingContext, Maybe TraceControl, Maybe a)
-    prepare (lc, mbC, Folding FrequencyRec {..}) = (lc, mbC, frMessage)
-
-    cata :: Double -> FrequencyRec a -> a -> m (FrequencyRec a)
-    cata thresholdPeriod fs@FrequencyRec {..} message = do
+    checkLimiting :: Double -> FrequencyRec a -> LoggingContext -> a -> m (FrequencyRec a)
+    checkLimiting thresholdPeriod fs@FrequencyRec {..} lc message = do
+      -- trace ("Limiter " <> unpack limiterName <> " receives " <> show (lcNamespace lc))
+      --         $ pure ()
       timeNow <- liftIO $ systemTimeToSeconds <$> getSystemTime
       let elapsedTime      = timeNow - frLastTime
       let rawSpendReward   = elapsedTime - thresholdPeriod
@@ -115,7 +115,7 @@ limitFrequency thresholdFrequency limiterName vtracer ltracer = do
           if spendReward + frBudget <= -1.0
             then do  -- start limiting
               traceWith
-                (setSeverity Info ltracer)
+                (setSeverity Info (withLoggingContext lc ltracer))
                 (StartLimiting limiterName)
               pure fs  { frMessage     = Just message
                        , frLastTime    = timeNow
@@ -131,7 +131,7 @@ limitFrequency thresholdFrequency limiterName vtracer ltracer = do
           if spendReward + frBudget >= 1.0
             then do -- stop limiting
               traceWith
-                (setSeverity Info ltracer)
+                (setSeverity Info (withLoggingContext lc ltracer))
                 (StopLimiting limiterName nSuppressed)
               pure fs  { frMessage     = Just message
                        , frLastTime    = timeNow
@@ -156,7 +156,11 @@ limitFrequency thresholdFrequency limiterName vtracer ltracer = do
                                , frBudget      = newBudget
                                , frActive      = Just (nSuppressed + 1, lastTimeSend)
                                }
+    unfoldTrace ::
+         (LoggingContext, Maybe TraceControl, Folding a (FrequencyRec a))
+      -> (LoggingContext, Maybe TraceControl, Maybe a)
+    unfoldTrace (lc, mbC, Folding FrequencyRec {..}) = (lc, mbC, frMessage)
 
-systemTimeToSeconds :: SystemTime -> Double
-systemTimeToSeconds MkSystemTime {..} =
-  fromIntegral systemSeconds + fromIntegral systemNanoseconds * 1.0E-9
+    systemTimeToSeconds :: SystemTime -> Double
+    systemTimeToSeconds MkSystemTime {..} =
+      fromIntegral systemSeconds + fromIntegral systemNanoseconds * 1.0E-9

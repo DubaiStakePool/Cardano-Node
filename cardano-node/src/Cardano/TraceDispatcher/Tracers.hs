@@ -109,6 +109,16 @@ import           Debug.Trace
 
 type Peer = NtN.ConnectionId Socket.SockAddr
 
+data MessageOrLimit m = Message m | Limit LimitingMessage
+
+instance (LogFormatting m) => LogFormatting (MessageOrLimit m) where
+  forMachine dtal (Message m)   = forMachine dtal m
+  forMachine dtal (Limit m)     = forMachine dtal m
+  forHuman (Message m)          = forHuman m
+  forHuman (Limit m)            = forHuman m
+  asMetrics (Message m)         = asMetrics m
+  asMetrics (Limit m)           = asMetrics m
+
 -- | Construct a tracer according to the requirements for cardano node.
 --
 -- The tracer gets a 'name', which is appended to its namespace.
@@ -134,8 +144,7 @@ mkCardanoTracer :: forall evt.
 mkCardanoTracer name namesFor severityFor privacyFor
   trStdout trForward mbTrEkg = do
     tr  <- withBackendsFromConfig routeAndFormat
-    trl <- withBackendsFromConfig routeAndFormatLimiter
-    tr' <- withLimitersFromConfig tr trl
+    tr' <- withLimitersFromConfig (contramap Message tr) (contramap Limit tr)
     addContextAndFilter tr'
   where
     addContextAndFilter :: Trace IO evt -> IO (Trace IO evt)
@@ -151,7 +160,7 @@ mkCardanoTracer name namesFor severityFor privacyFor
     routeAndFormat ::
          Maybe [BackendConfig]
       -> Trace m x
-      -> IO (Trace IO evt)
+      -> IO (Trace IO (MessageOrLimit evt))
     routeAndFormat mbBackends _ =
       let backends = case mbBackends of
                         Just b -> b
@@ -179,33 +188,6 @@ mkCardanoTracer name namesFor severityFor privacyFor
                                   (machineFormatter "Cardano" trStdout)
                                 else pure Nothing
         case mbEkgTrace <> mbForwardTrace <> mbStdoutTrace of
-          Nothing -> pure $ Trace NT.nullTracer
-          Just tr -> pure tr
-
-    routeAndFormatLimiter ::
-         Maybe [BackendConfig]
-      -> Trace m x
-      -> IO (Trace IO LimitingMessage)
-    routeAndFormatLimiter mbBackends _ =
-      let backends = case mbBackends of
-                        Just b -> b
-                        Nothing -> [Forwarder, Stdout HumanFormatColoured]
-      in do
-        mbForwardTrace <- if elem Forwarder backends
-                            then liftM Just
-                                    (forwardFormatter "Cardano" trForward)
-                            else pure Nothing
-        mbStdoutTrace  <-  if elem (Stdout HumanFormatColoured) backends
-                            then liftM Just
-                                (humanFormatter True "Cardano" trStdout)
-                            else if elem (Stdout HumanFormatUncoloured) backends
-                              then liftM Just
-                                  (humanFormatter False "Cardano" trStdout)
-                              else if elem (Stdout MachineFormat) backends
-                                then liftM Just
-                                  (machineFormatter "Cardano" trStdout)
-                                else pure Nothing
-        case mbForwardTrace <> mbStdoutTrace of
           Nothing -> pure $ Trace NT.nullTracer
           Just tr -> pure tr
 

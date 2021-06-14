@@ -41,8 +41,8 @@ baseStatsDocumented =
 emptyStats :: BaseStats
 emptyStats = BaseStats 0.0 100000000.0 (-100000000.0) 0 0.0
 
-calculate :: BaseStats -> Double -> BaseStats
-calculate BaseStats{..} val =
+calculate :: BaseStats -> LoggingContext -> Double -> BaseStats
+calculate BaseStats{..} _ val =
    BaseStats  val
               (min bsMin val)
               (max bsMax val)

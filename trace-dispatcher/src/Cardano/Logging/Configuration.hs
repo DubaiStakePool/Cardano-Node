@@ -29,7 +29,7 @@ import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import           Data.List (foldl', maximumBy, nub)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe, mapMaybe)
-import           Data.Text (Text, split)
+import           Data.Text (Text, split, unpack)
 import           Data.Yaml
 import           GHC.Generics
 
@@ -56,11 +56,12 @@ configureTracers config (Documented documented) tracers = do
 -- Take a function from trace to trace with this config dependent value.
 -- In this way construct a trace transformer with a config value
 withNamespaceConfig :: forall m a b c. (MonadIO m, Ord b) =>
-     (TraceConfig -> Namespace -> m b)
+     String
+  -> (TraceConfig -> Namespace -> m b)
   -> (Maybe b -> Trace m c -> m (Trace m a))
   -> Trace m c
   -> m (Trace m a)
-withNamespaceConfig extract withConfig tr = do
+withNamespaceConfig name extract withConfig tr = do
     ref  <- liftIO (newIORef (Left (Map.empty, Nothing)))
     pure $ Trace $ T.arrow $ T.emit $ mkTrace ref
   where
@@ -83,7 +84,7 @@ withNamespaceConfig extract withConfig tr = do
                 Nothing  -> do
                   tt <- withConfig (Just v) tr
                   T.traceWith (unpackTrace tt) (lc, Nothing, a)
-        Left (_cmap, Nothing) -> error ("Missing configuration " <> show (lcNamespace lc))
+        Left (_cmap, Nothing) -> error ("Missing configuration " <> name <> " ns " <> show (lcNamespace lc))
     mkTrace ref (lc, Just Reset, a) = do
       liftIO $ writeIORef ref (Left (Map.empty, Nothing))
       tt <- withConfig Nothing tr
@@ -99,13 +100,13 @@ withNamespaceConfig extract withConfig tr = do
               liftIO
                   $ writeIORef ref
                   $ Left (Map.insert (lcNamespace lc) val cmap, Nothing)
-              tt <- withConfig (Just val) tr
-              T.traceWith (unpackTrace tt) (lc, Just (Config c), m)
+              Trace tt <- withConfig (Just val) tr
+              T.traceWith tt (lc, Just (Config c), m)
             Just v  -> do
               if v == val
                 then do
-                  tt <- withConfig (Just val) tr
-                  T.traceWith (unpackTrace tt) (lc, Just (Config c), m)
+                  Trace tt <- withConfig (Just val) tr
+                  T.traceWith tt (lc, Just (Config c), m)
                 else error $ "Inconsistent trace configuration with context "
                                   ++ show (lcNamespace lc)
         Right _val -> error $ "Trace not reset before reconfiguration (1)"
@@ -118,12 +119,15 @@ withNamespaceConfig extract withConfig tr = do
       case eitherConf of
         Left (cmap, Nothing) ->
           case nub (Map.elems cmap) of
-            []     ->  -- This will never be called!?
+            []     -> -- trace ("mkTrace Optimize empty " <> show (lcNamespace lc)) $
+                      -- This will never be called!?
                       pure ()
             [val]  -> do
+                        -- trace ("mkTrace Optimize one "  <> show (lcNamespace lc)
+                        --   <> " val " <> show val) $ pure ()
                         liftIO $ writeIORef ref $ Right val
-                        tt <- withConfig (Just val) tr
-                        T.traceWith (unpackTrace tt) (lc, Just Optimize, m)
+                        Trace tt <- withConfig (Just val) tr
+                        T.traceWith tt (lc, Just Optimize, m)
             _      -> let decidingDict =
                             foldl
                               (\acc e -> Map.insertWith (+) e (1 :: Int) acc)
@@ -134,9 +138,12 @@ withNamespaceConfig extract withConfig tr = do
                                               (Map.assocs decidingDict)
                           newmap = Map.filter (/= mostCommon) cmap
                       in do
+                        -- trace ("mkTrace Optimize map " <> show (lcNamespace lc)
+                        --         <> " val " <> show mostCommon
+                        --         <> " map " <> show newmap) $ pure ()
                         liftIO $ writeIORef ref (Left (newmap, Just mostCommon))
-                        tt <- withConfig Nothing tr
-                        T.traceWith (unpackTrace tt) (lc, Just Optimize, m)
+                        Trace tt <- withConfig Nothing tr
+                        T.traceWith tt (lc, Just Optimize, m)
         Right _val -> error $ "Trace not reset before reconfiguration (3)"
                             ++ show (lcNamespace lc)
         Left (_cmap, Just _v) ->
@@ -149,6 +156,7 @@ filterSeverityFromConfig :: (MonadIO m) =>
   -> m (Trace m a)
 filterSeverityFromConfig =
     withNamespaceConfig
+      "severity"
       getSeverity
       (\ a b -> pure $ filterTraceBySeverity a b)
 
@@ -158,6 +166,7 @@ withDetailsFromConfig :: (MonadIO m) =>
   -> m (Trace m a)
 withDetailsFromConfig =
   withNamespaceConfig
+    "details"
     getDetails
     (\mbDtl b -> case mbDtl of
               Just dtl -> pure $ setDetails dtl b
@@ -169,6 +178,7 @@ withBackendsFromConfig :: (MonadIO m) =>
   -> m (Trace m a)
 withBackendsFromConfig routerAndFormatter =
   withNamespaceConfig
+    "backends"
     getBackends
     routerAndFormatter
     (Trace T.nullTracer)
@@ -181,6 +191,9 @@ instance Eq (Limiter m a) where
 instance Ord (Limiter m a) where
   Limiter t1 _ <= Limiter t2 _ = t1 <= t2
 
+instance Show (Limiter m a) where
+  show (Limiter name _) = "Limiter " <> unpack name
+
 
 -- | Routing and formatting of a trace from the config
 withLimitersFromConfig :: forall a m .(MonadUnliftIO m) =>
@@ -190,8 +203,9 @@ withLimitersFromConfig :: forall a m .(MonadUnliftIO m) =>
 withLimitersFromConfig tr trl = do
     ref <- liftIO $ newIORef Map.empty
     withNamespaceConfig
+      "limiters"
       (getLimiter ref)
-      applyLimiter
+      withLimiter
       tr
   where
     -- | May return a limiter, which is a stateful transformation from trace to trace
@@ -211,22 +225,27 @@ withLimitersFromConfig tr trl = do
               limiterTrace <- limitFrequency frequency name tr trl
               let limiter = Limiter name limiterTrace
               liftIO $ writeIORef stateRef (Map.insert name limiter state)
-              pure $ limiter
+              pure limiter
 
-    applyLimiter ::
+    withLimiter ::
          Maybe (Limiter m a)
       -> Trace m a
       -> m (Trace m a)
-    applyLimiter Nothing trace                     = pure trace
-    applyLimiter (Just (Limiter _n trace')) _trace = pure trace'
+    withLimiter Nothing (Trace tr') =
+      pure $ Trace $ T.arrow $ T.emit $
+        \case
+          (lc, Nothing, v) -> do
+            T.traceWith tr' (lc, Nothing, v)
+          (lc, Just c, v) -> do
+            T.traceWith tr' (lc, Just c, v)
 
-
-_allLimiters :: TraceConfig -> [(Text, Double)]
-_allLimiters TraceConfig {..} = Map.foldrWithKey' extractor [] tcOptions
-  where
-    extractor ns configOptions limiterSpecs =
-      foldr (extractor' ns) limiterSpecs configOptions
-    extractor' _ns (CoLimiter name freq) accu = (name, freq) : accu
+    withLimiter (Just (Limiter _n (Trace trli))) (Trace tr') =
+      pure $ Trace $ T.arrow $ T.emit $
+        \case
+          (lc, Nothing, v) -> do
+            T.traceWith trli (lc, Nothing, v)
+          (lc, Just c, v) -> do
+            T.traceWith (tr' <> trli) (lc, Just c, v)
 
 -- -----------------------------------------------------------------------------
 -- Configuration file

@@ -263,14 +263,14 @@ UseTraceDispatcher: True
 TraceOptionSeverity:
   - ns: ''
     severity: InfoF
-  - ns: Cardano.Node.AcceptPolicy
+  - ns: Node.AcceptPolicy
     severity: SilenceF
-  - ns: Cardano.Node.ChainDB
+  - ns: Node.ChainDB
     severity: DebugF
 TraceOptionDetail:
   - ns: ''
     detail: DRegular
-  - ns: Cardano.Node.BlockFetchClient
+  - ns: Node.BlockFetchClient
     detail: DBrief
 TraceOptionBackend:
   - ns: ''
@@ -278,11 +278,11 @@ TraceOptionBackend:
     - Stdout HumanFormatColoured
     - Forwarder
     - EKGBackend
-  - ns: Cardano.Node.ChainDB
+  - ns: Node.ChainDB
     backends:
     - Forwarder
 TraceOptionLimiter:
-  - ns: Cardano.Node.Resources
+  - ns: Node.Resources
     limiterName: ResourceLimiter
     limiterFrequency: 1.0
 TraceOptionForwarder:

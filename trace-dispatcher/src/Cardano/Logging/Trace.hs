@@ -10,6 +10,7 @@ module Cardano.Logging.Trace (
   , filterTrace
   , filterTraceMaybe
   , filterTraceBySeverity
+  , withLoggingContext
   , appendName
   , withNamesAppended
   , setSeverity
@@ -67,7 +68,6 @@ filterTraceMaybe :: Monad m =>
 filterTraceMaybe (Trace tr) = Trace $
     T.squelchUnless
       (\case
-        (_lc, Just _, _) -> True
         (_lc, _mbC, Just _a) -> True
         (_lc, _mbC, Nothing) -> False)
       (T.contramap
@@ -92,21 +92,29 @@ filterTraceBySeverity (Just minSeverity) =
             Nothing -> True
 filterTraceBySeverity Nothing = id
 
+-- | Sets a new logging context for this message
+withLoggingContext :: Monad m => LoggingContext -> Trace m a -> Trace m a
+withLoggingContext lc (Trace tr) = Trace $
+    T.contramap
+      (\
+        (_lc, mbC, e) -> (lc, mbC, e))
+      tr
+
 -- | Appends a name to the context.
 -- E.g. appendName "specific" $ appendName "middle" $ appendName "general" tracer
 -- give the result: `general.middle.specific`.
 appendName :: Monad m => Text -> Trace m a -> Trace m a
 appendName name (Trace tr) = Trace $
     T.contramap
-      (\ case
+      (\
         (lc, mbC, e) -> (lc {lcNamespace = name : lcNamespace lc}, mbC, e))
       tr
 
--- | Sets severities for the messages in this trace based on the selector function
+-- | Sets names for the messages in this trace based on the selector function
 withNamesAppended :: Monad m => (a -> [Text]) -> Trace m a -> Trace m a
 withNamesAppended func (Trace tr) = Trace $
     T.contramap
-      (\case
+      (\
         (lc, mbC, e) -> (lc {lcNamespace = func e ++ lcNamespace lc}, mbC, e))
       tr
 
@@ -122,7 +130,7 @@ setSeverity s (Trace tr) = Trace $ T.contramap
 withSeverity :: Monad m => (a -> SeverityS) -> Trace m a -> Trace m a
 withSeverity fs (Trace tr) = Trace $
     T.contramap
-      (\case
+      (\
         (lc, mbC, e) -> if isJust (lcSeverity lc)
                             then (lc, mbC, e)
                             else (lc {lcSeverity = Just (fs e)}, mbC, e))
@@ -166,7 +174,7 @@ setPrivacy p (Trace tr) = Trace $
 withPrivacy :: Monad m => (a -> Privacy) -> Trace m a -> Trace m a
 withPrivacy fs (Trace tr) = Trace $
     T.contramap
-      (\case
+      (\
         (lc, mbC, e) -> if isJust (lcPrivacy lc)
                             then (lc, mbC, e)
                             else (lc {lcPrivacy = Just (fs e)}, mbC, e))
@@ -185,7 +193,7 @@ setDetails p (Trace tr) = Trace $
 withDetails :: Monad m => (a -> DetailLevel) -> Trace m a -> Trace m a
 withDetails fs (Trace tr) = Trace $
   T.contramap
-    (\case
+    (\
       (lc, mbC, e) -> if isJust (lcDetails lc)
                           then (lc, mbC, e)
                           else (lc {lcDetails = Just (fs e)}, mbC, e))
@@ -195,7 +203,7 @@ withDetails fs (Trace tr) = Trace $
 -- Uses an MVar to store the state
 foldTraceM
   :: forall a acc m . (MonadUnliftIO m)
-  => (acc -> a -> acc)
+  => (acc -> LoggingContext -> a -> acc)
   -> acc
   -> Trace m (Folding a acc)
   -> m (Trace m a)
@@ -205,17 +213,20 @@ foldTraceM cata initial (Trace tr) = do
   pure $ Trace (T.Tracer trr)
  where
     mkTracer ref = T.emit $
-      \ (lc, mbC, v) -> do
+      \case
+        (lc, Nothing, v) -> do
           x' <- modifyMVar ref $ \x ->
-            let ! accu = cata x v
+            let ! accu = cata x lc v
             in pure $ join (,) accu
-          T.traceWith tr (lc, mbC, Folding x')
+          T.traceWith tr (lc, Nothing, Folding x')
+        (lc, Just control, _v) -> do
+          T.traceWith tr (lc, Just control, Folding initial)
 
 -- | Folds the monadic cata function with acc over a.
 -- Uses an IORef to store the state
 foldMTraceM
   :: forall a acc m . (MonadUnliftIO m)
-  => (acc -> a -> m acc)
+  => (acc -> LoggingContext -> a -> m acc)
   -> acc
   -> Trace m (Folding a acc)
   -> m (Trace m a)
@@ -225,11 +236,14 @@ foldMTraceM cata initial (Trace tr) = do
   pure $ Trace (T.arrow trr)
  where
     mkTracer ref = T.emit $
-      \ (lc, mbC, v) -> do
+      \case
+        (lc, Nothing, v) -> do
           x' <- modifyMVar ref $ \x -> do
-            ! accu <- cata x v
+            ! accu <- cata x lc v
             pure $ join (,) accu
-          T.traceWith tr (lc, mbC, Folding x')
+          T.traceWith tr (lc, Nothing, Folding x')
+        (lc, Just control, _v) -> do
+          T.traceWith tr (lc, Just control, Folding initial)
 
 -- | Allows to route to different tracers, based on the message being processed.
 --   The second argument must mappend all possible tracers of the first
@@ -241,5 +255,5 @@ routingTrace
   -> Trace m a
 routingTrace rf rc = Trace $ T.arrow $ T.emit $
     \case
-      (lc, Just control, a) -> T.traceWith (unpackTrace rc) (lc, Just control, a)
-      (lc, mbC, a) -> T.traceWith (unpackTrace (rf a)) (lc, mbC, a)
+    (lc, Nothing, a) -> T.traceWith (unpackTrace (rf a)) (lc, Nothing, a)
+    (lc, Just control, a) -> T.traceWith (unpackTrace rc) (lc, Just control, a)
