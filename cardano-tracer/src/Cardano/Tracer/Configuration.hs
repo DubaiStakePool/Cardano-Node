@@ -26,7 +26,7 @@ type Host = String
 type Port = Int
 
 data RemoteAddr
-  = LocalPipe !FilePath
+  = LocalSocket !FilePath
   | RemoteSocket !Host !Port
   deriving (Eq, Generic, FromJSON, Show, ToJSON)
 

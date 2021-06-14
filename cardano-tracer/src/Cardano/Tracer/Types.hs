@@ -20,7 +20,7 @@ import           Data.Hashable (Hashable)
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import           Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
-import           Data.Text (Text, pack, splitOn, unpack)
+import           Data.Text (Text, pack, replace, splitOn, unpack)
 import           Data.Word (Word16)
 import           GHC.Generics (Generic)
 import qualified System.Metrics as EKG
@@ -37,23 +37,30 @@ type NodeName = Text
 getNodeName :: NodeInfoStore -> IO (Maybe NodeName)
 getNodeName niStore = lookup "NodeName" <$> readIORef niStore
 
--- | Unique identifier of node: its IP:port.
+-- | Unique identifier of the node.
 data NodeId = NodeId
-  { nodeIP   :: !String
+  { nodeHost :: !String
   , nodePort :: !Word16
   } deriving (Eq, Generic, Hashable, Ord)
 
 instance Show NodeId where
-  show (NodeId pipe 0)  = pipe
+  show (NodeId pipeWithNum 0) = pipeWithNum
   show (NodeId ip port) = ip <> "-" <> show port
 
 addressToNodeId :: String -> NodeId
 addressToNodeId remoteAddress =
-  -- The string 'remoteAddress' can contain the normal address (IP:port)
-  -- or the path to local pipe file.
+  -- The string 'remoteAddress' can contain two kinds of address:
+  -- 1. the pair of IP:port
+  -- 2. the path to local socket file with the connection number,
+  --    to make 'remoteAddress' unique for each connected node.
   case splitOn ":" . pack $ remoteAddress of
     [ip, port] -> NodeId (unpack ip) (read (unpack port) :: Word16)
-    _          -> NodeId "LocalPipe" 0
+    _          -> NodeId preparedLocalSocket 0
+ where
+  preparedLocalSocket =
+    -- The format of 'remoteAddress' in this case looks like 'LocalAddress "temp-NUM"',
+    -- so make it simpler, like 'LocalAddress-temp-NUM'.
+    unpack . replace " " "-" . replace "\"" "" . pack $ remoteAddress
 
 type TraceObjects = TBQueue TraceObject
 
