@@ -120,10 +120,10 @@ mkAcceptorsConfigs TracerConfig{..} stopEKG stopTF = (ekgConfig, tfConfig)
       , TF.actionOnDone      = putStrLn "TF: we are done!"
       }
 
-  forTF (LocalPipe p)        = TF.LocalPipe p
+  forTF (LocalSocket p)      = TF.LocalPipe p
   forTF (RemoteSocket h p)   = TF.RemoteSocket (pack h) (fromIntegral p)
 
-  forEKGF (LocalPipe p)      = EKGF.LocalPipe p
+  forEKGF (LocalSocket p)    = EKGF.LocalPipe p
   forEKGF (RemoteSocket h p) = EKGF.RemoteSocket (pack h) (fromIntegral p)
 
 runAcceptors'
@@ -134,9 +134,9 @@ runAcceptors'
   -> IO ()
 runAcceptors' endpoint configs tidVar acceptedItems = withIOManager $ \iocp -> do
   case endpoint of
-    LocalPipe localPipe -> do
-      let snock = localSnocket iocp localPipe
-          addr  = localAddressFromPath localPipe
+    LocalSocket localSock -> do
+      let snock = localSnocket iocp localSock
+          addr  = localAddressFromPath localSock
       doListenToForwarder snock addr noTimeLimitsHandshake configs tidVar acceptedItems
     RemoteSocket host port -> do
       listenAddress:_ <- Socket.getAddrInfo Nothing (Just host) (Just $ show port)
