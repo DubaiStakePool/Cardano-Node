@@ -85,6 +85,14 @@ ownCSS = unpack . TL.toStrict . render $ do
 
   ".rt-view-node-panel-cols" ? do
     widthPct          100
+
+  ".rt-view-no-nodes-icon" ** "svg" ? do
+    widthPx           70
+    marginBottomPx    18
+    color             "#677deb"
+
+  ".rt-view-no-nodes-message" ? do
+    fontSizePx        22
  where
   cardanoLight    = whitesmoke -- rgb  31 193 195
   cardanoDark     = rgb   0  51 173

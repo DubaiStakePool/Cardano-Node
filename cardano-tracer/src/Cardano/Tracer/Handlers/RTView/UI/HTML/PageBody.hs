@@ -10,16 +10,31 @@ import           Graphics.UI.Threepenny.Core
 import           Cardano.Tracer.Handlers.RTView.UI.Img.Icons
 import           Cardano.Tracer.Handlers.RTView.UI.HTML.OwnInfo (mkOwnInfo)
 
-mkPageBody :: UI.Window -> UI Element
+mkPageBody
+  :: UI.Window
+  -> UI (Element, Element, Element)
 mkPageBody window = do
-  --di <- image "rt-view-node-panel-down" downSVG
-  --on UI.click di $ const $ 
+  noNodesNotify
+    <- UI.div #. "container is-max-widescreen has-text-centered" #+
+         [ image "rt-view-no-nodes-icon" noNodesSVG
+         , UI.p #. "rt-view-no-nodes-message" #+
+             [ string "There are no connected nodes. Yet." ]
+         ]
+  rootElemForNodePanels
+    <- UI.div #. "container is-max-widescreen" #+ []
+  body
+    <- UI.getBody window #+
+         [ topNavigation
+         , UI.mkElement "section" #. "section" #+
+             [ element noNodesNotify
+             , element rootElemForNodePanels
+             ]
+         ]
+  return (body, noNodesNotify, rootElemForNodePanels)
 
-  body <- UI.getBody window #+
-    [ topNavigation
-    , UI.mkElement "section" #. "section" #+
-        [ UI.div #. "container is-max-widescreen" #+
-            [ UI.div #. "panel" #+
+{-
+
+              UI.div #. "panel" #+
                 [ UI.p #. "panel-heading" #+
                     [ UI.div #. "columns" #+
                         [ UI.div #. "column" #+
@@ -60,10 +75,8 @@ mkPageBody window = do
                         ]
                     ]
                 ]
-            ]
-        ]
-    ]
-  return body
+
+-}
 
 topNavigation :: UI Element
 topNavigation = do

@@ -1,15 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Tracer.Handlers.RTView.WebServer
   ( runWebServer
   ) where
 
-import           Control.Concurrent.STM.TVar (TVar)
+import           Control.Concurrent.STM.TVar (TVar, newTVarIO)
 import           Control.Monad (void)
 import qualified Data.ByteString.Char8 as BSC
+import qualified Data.HashMap.Strict as HM
 import           Data.Text (Text)
 import qualified Graphics.UI.Threepenny as UI
-import           Graphics.UI.Threepenny.Core (UI, liftIO, onEvent, set, (#), (#+))
+import           Graphics.UI.Threepenny.Core (UI, liftIO, on, onEvent, set, (#), (#+))
 --import           Graphics.UI.Threepenny.Timer (interval, start, tick, timer)
 
 --import           Cardano.RTView.CLI (RTViewParams (..))
@@ -23,9 +25,15 @@ import           Cardano.Tracer.Handlers.RTView.UI.HTML.PageBody (mkPageBody)
 import           Cardano.Tracer.Configuration
 import           Cardano.Tracer.Handlers.RTView.UI.CSS.Own (ownCSS)
 import           Cardano.Tracer.Handlers.RTView.UI.CSS.Bulma (bulmaCSS)
+import           Cardano.Tracer.Handlers.RTView.UI.Elements (PageElements)
+import           Cardano.Tracer.Types (AcceptedItems)
 
-runWebServer :: Endpoint -> IO ()
-runWebServer (Endpoint host port) = UI.startGUI config mainPage
+runWebServer
+  :: Endpoint
+  -> AcceptedItems
+  -> IO ()
+runWebServer (Endpoint host port) _acceptedItems =
+  UI.startGUI config mainPage
  where
   config = UI.defaultConfig
     { UI.jsPort = Just port
@@ -41,7 +49,29 @@ runWebServer (Endpoint host port) = UI.startGUI config mainPage
       , UI.mkElement "style" # set UI.html ownCSS
       -- , UI.mkElement "script" # set UI.html chartJS
       ]
-    void $ mkPageBody window
+    
+    pageElementsTVar :: TVar PageElements <- liftIO $ newTVarIO HM.empty
+    
+    (pageBody, noNodesNotify, rootElemForNodePanels) <- mkPageBody window
+
+    -- Prepare and run the timer, which will call 'updateUI' function once per second .
+    uiUpdateTimer <- UI.timer # set UI.interval 1000
+    on UI.tick uiUpdateTimer $ const $
+      -- updateUI acceptedItems
+      return ()
+    UI.start uiUpdateTimer
+
+    on UI.disconnect window $ const $ do
+      -- If we're here, it means that the connection with the browser
+      -- was interrupted. So:
+      -- 1. All the Elements we stored for the regular updating,
+      --    are "invalid" now (we cannot manipulate them anymore),
+      --    so we must delete them explicitly.
+      -- 2. Previous timer should be stopped.
+      UI.stop uiUpdateTimer
+
+    void $ UI.element pageBody
+
 
   {-
 mainPage

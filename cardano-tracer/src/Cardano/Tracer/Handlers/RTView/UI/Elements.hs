@@ -3,6 +3,9 @@
 
 module Cardano.Tracer.Handlers.RTView.UI.Elements
   ( PageElements
+  , NodePanelElements
+  , TraceObjectName
+  , ElementValue (..)
     {-
   HTMLClass (..)
   , HTMLId (..)
@@ -30,13 +33,29 @@ import qualified Data.HashMap.Strict as HM
 import           Data.HashMap.Strict (HashMap)
 import           Data.Text (Text)
 
+import           Cardano.Tracer.Types (NodeId)
+
+-- | TraceObjectName is created from TraceObject's Namespace.
 type TraceObjectName = Text
 
-type NodeFullId = Text
+-- | The displayed value of each Element will be taken from
+--   the corresponding TraceObject, that's why TraceObject's
+--   name is a key here.
+--   The second value in a pair stores the current value of Element,
+--   we need it to check if the new value of the corresponding TraceObject
+--   differs from the current one (to avoid useless updating of Element).
+type NodePanelElements = HashMap TraceObjectName (Element, ElementValue)
 
-type NodePanelElements = HashMap TraceObjectName Element
+-- | The first value in a pair is a node panel: we keep it to be able to
+--   delete it if the corresponding node was disconnected from 'cardano-tracer'.
+type PageElements = HashMap NodeId (Element, NodePanelElements)
 
-type PageElements = HashMap NodeFullId NodePanelElements
+data ElementValue
+  = StringV !String
+  | TextV   !Text
+
+
+
 
   {-
 import           Control.DeepSeq (NFData (..), rwhnf)
