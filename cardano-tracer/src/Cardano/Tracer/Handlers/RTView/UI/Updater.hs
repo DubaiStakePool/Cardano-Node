@@ -2,11 +2,43 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Cardano.RTView.GUI.Updater
-    ( updateGUI
-    -- For special cases
-    , justUpdateErrorsListAndTab
-    ) where
+module Cardano.Tracer.Handlers.RTView.UI.Updater
+  ( updateUI
+  ) where
+
+import           Control.Concurrent.STM.TVar (TVar, readTVarIO)
+import           Control.Monad (forM_)
+import qualified Data.HashMap.Strict as HM
+import           Data.IORef (readIORef)
+import           Graphics.UI.Threepenny.Core (Element, UI, liftIO)
+
+import           Cardano.Tracer.Handlers.RTView.UI.Elements
+import           Cardano.Tracer.Types (AcceptedItems)
+
+updateUI
+  :: AcceptedItems
+  -> TVar PageElements
+  -> Element
+  -> Element
+  -> UI ()
+updateUI acceptedItemsIORef pageElementsTVar noNodesNotify rootElemForNodePanels = do
+  pageElements <- liftIO . readTVarIO $ pageElementsTVar
+  acceptedItems <- liftIO . readIORef $ acceptedItemsIORef
+  forM_ (HM.toList acceptedItems) $ \(nodeId, (niStore, traceObjects, metrics)) ->
+    case HM.lookup nodeId pageElements of
+      Just (nodePanel, nodePanelEls) ->
+        -- Such node panel is already here, check if we need to update some of its elements.
+        -- check .
+        undefined
+      Nothing ->
+        -- No such node panel, it means that the new node with 'nodeId'
+        -- is connected to 'cardano-tracer' since the last check.
+        undefined
+
+-- AcceptedItems: HashMap NodeId (NodeInfoStore, TraceObjects, Metrics)
+-- PageElements:  HashMap NodeId (Element, NodePanelElements)
+
+  {-
 
 import           Control.Concurrent.STM.TVar (TVar, modifyTVar', readTVarIO)
 import           Control.Monad (void, forM, forM_, unless, when)
@@ -642,3 +674,4 @@ setChangedFlag nsTVar nameOfNode mkNewNS =
     case currentNS !? nameOfNode of
       Just ns -> HM.adjust (const $ mkNewNS ns) nameOfNode currentNS
       Nothing -> currentNS
+      -}
