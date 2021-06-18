@@ -29,11 +29,11 @@ updateUI acceptedItemsIORef pageElementsTVar noNodesNotify rootElemForNodePanels
       Just (nodePanel, nodePanelEls) ->
         -- Such node panel is already here, check if we need to update some of its elements.
         -- check .
-        undefined
+        return ()
       Nothing ->
         -- No such node panel, it means that the new node with 'nodeId'
         -- is connected to 'cardano-tracer' since the last check.
-        undefined
+        return ()
 
 -- AcceptedItems: HashMap NodeId (NodeInfoStore, TraceObjects, Metrics)
 -- PageElements:  HashMap NodeId (Element, NodePanelElements)
