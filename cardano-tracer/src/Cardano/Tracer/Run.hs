@@ -27,5 +27,4 @@ runCardanoTracerWithConfig config = do
   --    and collect them in 'acceptedItems'.
   -- 2. For all handlers: they take items from 'acceptedItems' and do something
   --    with them (write to log files and return by web-request via EKG API).
-  concurrently_ (runAcceptors config acceptedItems)
-                (runHandlers  config acceptedItems)
+  runHandlers config acceptedItems

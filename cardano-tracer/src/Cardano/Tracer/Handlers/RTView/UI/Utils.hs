@@ -24,8 +24,8 @@ showInline = set style [("display", "inline")]
 hideIt     = set style [("display", "none")]
 
 pageTitle, pageTitleNotify :: String
-pageTitle       = "RTView"
-pageTitleNotify = "(!) RTView"
+pageTitle       = "Cardano RTView"
+pageTitleNotify = "(!) Cardano RTView"
 
 dataAttr :: String -> Attr Element String
 dataAttr name = mkReadWriteAttr getData setData

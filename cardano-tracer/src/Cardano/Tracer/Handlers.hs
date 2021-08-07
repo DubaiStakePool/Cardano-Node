@@ -16,11 +16,10 @@ runHandlers
   -> AcceptedItems
   -> IO ()
 runHandlers config acceptedItems = do
-  lThr <- async $ runLogsHandler    config acceptedItems
-  mThr <- async $ runMetricsHandler config acceptedItems
-  void $ case hasRTView config of
+  --lThr <- async $ runLogsHandler    config acceptedItems
+  --mThr <- async $ runMetricsHandler config acceptedItems
+  case hasRTView config of
     Just endPoint -> do
       rThr <- async $ runRTView endPoint acceptedItems
-      waitAnyCancel [lThr, mThr, rThr]
-    Nothing ->
-      waitAnyCancel [lThr, mThr]
+      void $ waitAnyCancel [rThr]
+    Nothing -> undefined

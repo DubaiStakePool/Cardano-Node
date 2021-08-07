@@ -9,10 +9,11 @@
   "loRequestNum": 1,
   "ekgRequestFreq": 1,
   "hasEKG": null,
-  "hasPrometheus": [
+  "hasRTView": [
     "127.0.0.1",
-    12798
+    8000
   ],
+  "hasPrometheus": null,
   "logging": [
     {
       "logRoot": "/tmp/cardano-tracer-logs",
@@ -20,9 +21,5 @@
       "logFormat": "ForMachine"
     }
   ],
-  "rotation": {
-    "rpKeepFilesNum": 1,
-    "rpLogLimitBytes": 50000,
-    "rpMaxAgeHours": 1
-  }
+  "rotation": null
 }

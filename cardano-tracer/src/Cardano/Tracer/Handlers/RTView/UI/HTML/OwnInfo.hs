@@ -36,16 +36,16 @@ mkOwnInfo closeIt =
         [ UI.div #. "container" #+
             [ UI.div #. "box" #+
                 [ UI.div #. "columns" #+
-                    [ UI.div #. "column has-text-right" #+
-                        [ UI.p #. "mb-1" #+ [ string "Version"
+                    [ UI.div #. "column has-text-right mr-1" #+
+                        [ UI.p #. "mb-2" #+ [ string "Version"
                                             , image "rt-view-what-icon" questionSVG
                                                     # set UI.title__ "Version of cardano-tracer RTView is a part of"
                                             ]
-                        , UI.p #. "mb-1" #+ [ string "Commit"
+                        , UI.p #. "mb-2" #+ [ string "Commit"
                                             , image "rt-view-what-icon" questionSVG
                                                     # set UI.title__ "Git commit cardano-tracer was built from"
                                             ]
-                        , UI.p #. "mb-1" #+ [ string "Platform"
+                        , UI.p #. "mb-2" #+ [ string "Platform"
                                             , image "rt-view-what-icon" questionSVG
                                                     # set UI.title__ "Platform cardano-tracer is running on"
                                             ]
@@ -54,14 +54,16 @@ mkOwnInfo closeIt =
                                                     # set UI.title__ "Versions of the nodes RTView was tested with"
                                             ]
                         ]
-                    , UI.div #. "column has-text-weight-semibold" #+
-                        [ UI.p #. "mb-1" #+ [string "1.0"]
-                        , UI.p #. "mb-1" #+ [string "abcdefg"]
-                        , UI.p #. "mb-1" #+ [string "Linux"]
+                    , UI.div #. "column has-text-weight-semibold ml-1" #+
+                        [ UI.p #. "mb-2" #+ [string "1.0"]
+                        , UI.p #. "mb-2" #+
+                            [ UI.anchor # set UI.href "#" # set UI.text "8013b61"
+                            ]
+                        , UI.p #. "mb-2" #+ [string "Linux"]
                         , UI.div #. "tags are-medium" #+
                             [ UI.span #. "tag is-link" # set text "1.27.0"
                             , UI.span #. "tag is-link" # set text "1.28.0"
-                            , UI.span #. "tag is-link" # set text "1.29.0"
+                            , UI.span #. "tag is-link" # set text "1.28.1"
                             ]
                         ]
                     ]

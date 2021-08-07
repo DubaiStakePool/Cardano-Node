@@ -46,7 +46,7 @@ import           Cardano.RTView.NodeState.Types
                     , UI.anchor                #+ [image "rt-view-node-tab-icon" kesSVG,        string "KES"]
                     , UI.anchor                #+ [image "rt-view-node-tab-icon" peersSVG,      string "Peers"]
                     , UI.anchor                #+ [image "rt-view-node-tab-icon" blockchainSVG, string "Blockchain"]
-                    , UI.anchor                #+ [image "rt-view-node-tab-icon" mempoolSVG,    string "Mempool"]
+                    , UI.anchor                #+ [string "₳",    string "Tx"]
                     , UI.anchor                #+ [image "rt-view-node-tab-icon" errorsSVG,     string "Errors"]
                     , UI.anchor                #+ [image "rt-view-node-tab-icon" rtsGCSVG,      string "RTS GC"]
                     ]

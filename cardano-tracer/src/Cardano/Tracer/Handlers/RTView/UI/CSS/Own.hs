@@ -53,20 +53,31 @@ ownCSS = unpack . TL.toStrict . render $ do
     color             "#888"
     cursor            pointer
 
+  ".rt-view-node-name" ? do
+    fontWeight        normal
+    marginRightPx     10
+
   ".rt-view-overview-icon" ** "svg" ? do
     widthPx           16
-    marginRightPx     10
-    color             "#999"
+    marginRightPx     8
+    color             "#DC9B32"
+
+  ".rt-view-ada-node-icon" ? do
+    marginRightPx     6
+    color             "#485fc7"
+    fontWeight        bold
 
   ".rt-view-node-tab-icon" ** "svg" ? do
-    widthPx           16
-    marginRightPx     2
+    maxWidthPx        16
+    marginRightPx     6
+    marginTopPx       8
     color             "#485fc7"
-    maxHeightPx       16
+    heightPx          16
     "object-fit"      -: "contain"
 
   ".rt-view-node-panel" ? do
-    backgroundColor   "#dedede"
+    important $
+      marginBottomPx  44
 
   ".rt-view-node-panel-down" ** "svg" ? do
     widthPx           13
@@ -75,13 +86,21 @@ ownCSS = unpack . TL.toStrict . render $ do
     cursor            pointer
 
   ".rt-view-node-panel-block" ? do
-    paddingTopPx      20
-    paddingBottomPx   20
+    paddingTopPx      18
+    paddingBottomPx   22
     paddingLeftPx     20
     paddingRightPx    20
+    backgroundColor   "#f4f0ec"
 
   ".rt-view-node-panel-cols" ? do
     widthPct          100
+
+  ".rt-view-tabs" ? do
+    important $
+      marginBottomPx  0
+
+  ".tabs.is-boxed" ** "li.is-active" ** "a" ? do
+    backgroundColor   "#f4f0ec"
 
   ".rt-view-no-nodes-icon" ** "svg" ? do
     widthPx           70
@@ -90,6 +109,31 @@ ownCSS = unpack . TL.toStrict . render $ do
 
   ".rt-view-no-nodes-message" ? do
     fontSizePx        22
+
+  ".rt-view-slash" ? do
+    marginLeftPx      10
+    marginRightPx     10
+    important $
+      fontWeight      normal
+    color             "#777"
+
+  ".rt-view-vspace-with-hr" ? do
+    marginTopPx       14
+    borderBottom      solid (px 1) "#cdcdcd"
+
+  ".rt-view-vspace-for-hr" ? do
+    marginBottomPx    27
+
+  ".rt-view-peers-table-container" ? do
+    display           flex
+    "flex"            -: "0 0 100%;"
+
+  ".rt-view-peers-table" ? do
+    backgroundColor   "#f4f0ec"
+    widthPct          100
+
+  ".rt-view-narrow-th" ? do
+    widthPct          8
  where
   cardanoLight    = whitesmoke -- rgb  31 193 195
   cardanoDark     = rgb   0  51 173
