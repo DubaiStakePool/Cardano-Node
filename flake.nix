@@ -96,6 +96,7 @@
           inherit (devShell) devops;
           inherit (pkgs) cardano-node-profiled cardano-node-eventlogged cardano-node-asserted tx-generator-profiled locli-profiled;
           membench = pkgs.callPackage ./membench.nix { inherit mainnet-chain; };
+          snapshot-generation = pkgs.callPackage ./snapshot-generation.nix { inherit mainnet-chain; };
         }
         // scripts
         // exes
