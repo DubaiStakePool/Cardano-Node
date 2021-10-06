@@ -92,11 +92,12 @@
            flake.packages;
 
 
-        packages = {
+        packages = lib.fix (self: {
           inherit (devShell) devops;
           inherit (pkgs) cardano-node-profiled cardano-node-eventlogged cardano-node-asserted tx-generator-profiled locli-profiled;
-          membench = pkgs.callPackage ./membench.nix { inherit mainnet-chain; };
+          membench = pkgs.callPackage ./membench.nix { snapshot = self.snapshot-generation; };
           snapshot-generation = pkgs.callPackage ./snapshot-generation.nix { inherit mainnet-chain; };
+          cardanoNodeHaskellPackages = pkgs.cardanoNodeHaskellPackages;
         }
         // scripts
         // exes
@@ -107,7 +108,7 @@
         }
 
         # Add checks to be able to build them individually
-        // (prefixNamesWith "checks/" checks);
+        // (prefixNamesWith "checks/" checks));
 
       in recursiveUpdate flake {
 
