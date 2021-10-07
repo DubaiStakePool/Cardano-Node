@@ -1,18 +1,46 @@
-{ runCommand, cardano-node, jq, snapshot }:
+{ runCommand, cardano-node, jq, snapshot, vmTools, strace, util-linux, e2fsprogs, gnugrep }:
 
 let
+  params = builtins.fromJSON (builtins.readFile ./membench_params.json);
   topology = { Producers = []; };
-  flags = "+RTS -RTS";
-  membench = runCommand "membench" {
-    buildInputs = [ cardano-node jq ];
-    topology = builtins.toJSON topology;
-    passAsFile = [ "topology" ];
-  } ''
-    pwd
-    cp -r ${snapshot}/chain chain
-    chmod -Rv +w chain
+  flags = params.rtsFlags;
+  topologyPath = builtins.toFile "topology.json" (builtins.toJSON topology);
+  membench = vmTools.runInLinuxVM (runCommand "membench" {
+    memSize = params.memSize; # mb
+    buildInputs = [ cardano-node jq strace util-linux e2fsprogs ];
+    succeedOnFailure = true;
+    preVM = ''
+      truncate disk.img --size 2G
+      export diskImage=$(realpath disk.img)
+    '';
+    failureHook = ''
+      pwd
+      ls -ltrh
+    '';
+    postVM = ''
+      echo postvm
+      pwd
+      ls -ltrh xchg/
+      mv -vi xchg/*.json $out/ || true
 
-    ls -ltrh chain
+      cd $out
+      ${gnugrep}/bin/egrep 'ReplayFromSnapshot|ReplayedBlock|will terminate|Ringing the node shutdown|TookSnapshot|cardano.node.resources' log.json > $out/summary.json
+    '';
+  } ''
+    echo 0 > /tmp/xchg/in-vm-exit
+    mkdir -pv $out/nix-support
+    echo 42 > $out/nix-support/failed
+
+    pwd
+    mkfs.ext4 /dev/vda
+    mkdir /state
+    mount /dev/vda /state
+    cp -r ${snapshot}/chain /state/chain
+    chmod -R +w /state/chain
+
+    cd /tmp/xchg
+
+    ls -ltrh /state/chain
     jq '.setupScribes = [
         .setupScribes[0] * { "scFormat":"ScJson" },
         {
@@ -29,16 +57,15 @@ let
       | .defaultScribes = .defaultScribes + [ [ "FileSK", "log.json" ] ]
       ' ${./configuration/cardano/mainnet-config.json} > config.json
     cp -v ${./configuration/cardano}/*-genesis.json .
-    cardano-node ${flags} run --database-path chain/ --config config.json --topology $topologyPath --shutdown-on-slot-synced 2000
+    cardano-node ${flags} run --database-path /state/chain/ --config config.json --topology ${topologyPath} --shutdown-on-slot-synced 2000
     #sleep 600
     #kill -int $!
     pwd
-    ls -ltrh chain/ledger/
-    mkdir $out
-    egrep 'ReplayFromSnapshot|ReplayedBlock|will terminate|Ringing the node shutdown|TookSnapshot|cardano.node.resources' log.json > $out/summary.json
+    ls -ltrh /state/chain/ledger/
     mv -vi log*json config.json $out/
-    mv chain $out/
-  '';
+    mv /state/chain $out/
+    rm $out/nix-support/failed
+  '');
 in
 runCommand "membench-post-process" {
   buildInputs = [ jq ];
@@ -50,5 +77,13 @@ runCommand "membench-post-process" {
   ln -s ${cardano-node}/bin/cardano-node .
   totaltime=$({ head -n1 log.json ; tail -n1 log.json;} | jq --slurp 'def katip_timestamp_to_iso8601: .[:-4] + "Z" | fromdateiso8601; map(.at | katip_timestamp_to_iso8601) | .[1] - .[0]')
 
-  jq --slurp < summary.json 'def minavgmax: length as $len | { min: (min/1024), avg: ((add / $len)/1024), max: (max/1024) }; map(select(.ns[0] == "cardano.node.resources") | .data) | { RSS: map(.RSS) | minavgmax, Heap: map(.Heap) | minavgmax, CentiCpuMax: map(.CentiCpu) | max, CentiMutMax: map(.CentiMut) | max, CentiGC: map(.CentiGC) | max, CentiBlkIO: map(.CentiBlkIO) | max, flags: "${flags}", chain: { startSlot: ${toString snapshot.snapshotSlot}, stopFile: ${toString snapshot.finalEpoch} }, totaltime:'$totaltime' }' > refined.json
+  if [ -f ${membench}/nix-support/failed ]; then
+    export FAILED=true
+    mkdir $out/nix-support -p
+    cp ${membench}/nix-support/failed $out/nix-support/failed
+  else
+    export FAILED=false
+  fi
+
+  jq --slurp < summary.json 'def minavgmax: length as $len | { min: (min/1024/1024), avg: ((add / $len)/1024/1024), max: (max/1024/1024) }; map(select(.ns[0] == "cardano.node.resources") | .data) | { RSS: map(.RSS) | minavgmax, Heap: map(.Heap) | minavgmax, CentiCpuMax: map(.CentiCpu) | max, CentiMutMax: map(.CentiMut) | max, CentiGC: map(.CentiGC) | max, CentiBlkIO: map(.CentiBlkIO) | max, flags: "${flags}", chain: { startSlot: ${toString snapshot.snapshotSlot}, stopFile: ${toString snapshot.finalEpoch} }, totaltime:'$totaltime', failed:'$FAILED', memSize: ${toString membench.memSize} }' > refined.json
 ''

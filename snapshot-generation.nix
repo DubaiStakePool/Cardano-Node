@@ -1,8 +1,9 @@
 { runCommand, db-analyser, mainnet-chain }:
 
 let
-  finalEpoch = 1800;
-  snapshotSlot = 38037613;
+  params = builtins.fromJSON (builtins.readFile ./membench_params.json);
+  snapshotSlot = params.snapshotSlot;
+  finalEpoch = params.finalImmFile;
   secondLastEpoch = finalEpoch - 1;
 in runCommand "snapshot-generation" {
   buildInputs = [ db-analyser ];
