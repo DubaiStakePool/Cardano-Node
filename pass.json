@@ -1,0 +1,24 @@
+{
+  "RSS": {
+    "min": 71.37109375,
+    "avg": 2399.037989327347,
+    "max": 6744.19140625
+  },
+  "Heap": {
+    "min": 44,
+    "avg": 2371.906112161311,
+    "max": 6717
+  },
+  "CentiCpuMax": 104132,
+  "CentiMutMax": 92218,
+  "CentiGC": 11959,
+  "CentiBlkIO": 0,
+  "flags": "+RTS -RTS",
+  "chain": {
+    "startSlot": 38037613,
+    "stopFile": 1800
+  },
+  "totaltime": 1603,
+  "failed": false,
+  "memSize": 16000
+}

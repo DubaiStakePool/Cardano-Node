@@ -1,5 +1,5 @@
 {
-  "memSize":7488,
+  "memSize":"auto",
   "snapshotSlot":38037613,
   "finalImmFile":1800,
   "rtsFlags":"+RTS -RTS"
