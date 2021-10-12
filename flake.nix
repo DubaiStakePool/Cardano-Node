@@ -94,7 +94,7 @@
 
         packages = lib.fix (self: {
           inherit (devShell) devops;
-          inherit (pkgs) cardano-node-profiled cardano-node-eventlogged cardano-node-asserted tx-generator-profiled locli-profiled;
+          inherit (pkgs) cardano-node-profiled cardano-node-eventlogged cardano-node-asserted tx-generator-profiled locli-profiled db-analyser;
           membench = pkgs.callPackage ./membench.nix { snapshot = self.snapshot-generation; };
           snapshot-generation = pkgs.callPackage ./snapshot-generation.nix { inherit mainnet-chain; };
           cardanoNodeHaskellPackages = pkgs.cardanoNodeHaskellPackages;
