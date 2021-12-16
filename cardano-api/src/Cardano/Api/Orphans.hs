@@ -126,6 +126,7 @@ instance ( Consensus.ShelleyBasedEra era
                             , "deposited" .= Shelley._deposited utxoState
                             , "fees" .= Shelley._fees utxoState
                             , "ppups" .= Shelley._ppups utxoState
+                            , "stakeDistro" .= Shelley._stakeDistro utxoState
                             ]
 
 instance ( ToJSON (Core.PParamsDelta era)
