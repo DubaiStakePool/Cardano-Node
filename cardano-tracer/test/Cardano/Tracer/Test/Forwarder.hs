@@ -238,7 +238,7 @@ traceObjectsWriter sink = forever $ do
  where
   mkTraceObject now = TraceObject
     { toHuman     = Just "Human Message for testing if our mechanism works as we expect"
-    , toMachine   = Just "{\"msg\": \"Very big message forMachine because we have to check if it works\"}"
+    , toMachine   = Just "{\"event\": \"ErrorPolicySuspendConsumer (Just (ConnectionExceptionTrace (SubscriberError {seType = SubscriberParallelConnectionCancelled, seMessage = \"Parallel connection cancelled \", seStack = []}))) 1s\"}"
     , toNamespace = ["demoNamespace"]
     , toSeverity  = Info
     , toDetails   = DNormal

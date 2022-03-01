@@ -14,7 +14,7 @@ module Cardano.Tracer.Handlers.Logs.File
 import           Control.Concurrent.Extra (Lock, withLock)
 import           Control.Monad (unless)
 import           Control.Monad.Extra (ifM)
-import           Data.Aeson (Value, (.=), decodeStrict', pairs)
+import           Data.Aeson (Value (..), (.=), eitherDecodeStrict', pairs)
 import           Data.Aeson.Encoding (encodingToLazyByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -133,9 +133,9 @@ traceObjectToJSON TraceObject{toMachine, toTimestamp, toNamespace, toHostname, t
       . encodingToLazyByteString
       . pairs $    "at"     .= formatTime defaultTimeLocale "%F %H:%M:%S%4QZ" toTimestamp
                 <> "ns"     .= mkName toNamespace
-                <> "data"   .= case decodeStrict' $ TE.encodeUtf8 msgForMachine of
-                                 Just (v :: Value) -> v
-                                 Nothing -> ""
+                <> "data"   .= case eitherDecodeStrict' $ TE.encodeUtf8 msgForMachine of
+                                 Left e -> String $ "Wrong msgForMachine: " <> T.pack e
+                                 Right (v :: Value) -> v
                 <> "sev"    .= T.pack (show toSeverity)
                 <> "thread" .= T.filter isDigit toThreadId
                 <> "host"   .= T.pack toHostname
