@@ -57,11 +57,39 @@ cluster-shell-trace:     ARGS += --arg 'autoStartCluster' true --argstr 'autoSta
 cluster-shell-dev-trace: ARGS += --arg 'autoStartCluster' true --arg 'workbenchDevMode' true --argstr 'autoStartClusterArgs' '--trace --trace-workbench' ## Enter Nix shell, dev mode, start workbench cluster, with shell tracing
 fixed:                   ARGS += --arg 'autoStartCluster' true
 fixed:                   PROFILE = fixed-alzo
-smoke:                   ARGS += --arg 'autoStartCluster' true --run "grep TraceOpenEvent.ClosedDB run/current/node-0/stdout >/dev/null && echo 'Smoke test:  PASS' || echo 'Smoke test:  FAIL'"
-smoke:                   PROFILE = smoke-alzo
-smoke-loaded:            ARGS += --arg 'autoStartCluster' true --run "grep TraceOpenEvent.ClosedDB run/current/node-0/stdout >/dev/null && echo 'Smoke test:  PASS' || echo 'Smoke test:  FAIL'"
-smoke-loaded:            PROFILE = smoke-loaded-alzo
-shell-dev cluster-shell-dev cluster-shell-trace cluster-shell-dev-trace fixed smoke smoke-loaded: shell
+forge-stress:            PROFILE = forge-stress-alzo
+shell-dev cluster-shell-dev cluster-shell-trace cluster-shell-dev-trace fixed forge-stress: shell
+
+test-smoke: smoke ## Build the 'workbench-smoke-test', same as the Hydra job
+smoke:
+	nix build -f 'default.nix' 'workbench-smoke-test'     --out-link result-smoke-run      --cores 0
+test-analysis: smoke-analysis ## Build the 'workbench-smoke-analysis', same as the Hydra job
+smoke-analysis:
+	nix build -f 'default.nix' 'workbench-smoke-analysis' --out-link result-smoke-analysis --cores 0 --show-trace
+ci-analysis:
+	nix build -f 'default.nix' 'workbench-ci-analysis'    --out-link result-ci-analysis    --cores 0 --show-trace
+
+list-profiles: ## List workbench profiles
+	nix build .#workbench.profile-names-json --json | jq '.[0].outputs.out' -r | xargs jq .
+show-profile: ## NAME=profile-name
+	@test -n "${NAME}" || { echo 'HELP:  to specify profile to show, add NAME=profle-name' && exit 1; }
+	nix build .#all-profiles-json --json --option substitute false | jq '.[0].outputs.out' -r | xargs jq ".\"${NAME}\" | if . == null then error(\"\n###\n### Error:  unknown profile: ${NAME}  Please consult:  make list-profiles\n###\") else . end"
+ps: list-profiles
+
+bump-cardano-node-workbench: ## Update the cardano-node-workbench flake input
+	nix flake lock --update-input cardano-node-workbench
+bump-node-measured: ## Update the node-measured flake input
+	nix flake lock --update-input node-measured
+bump-cardano-deployment: ## Sync the flake.lock to the CI check
+	nix run nixpkgs#nixUnstable -- build .#hydraJobs.cardano-deployment
+membench-1:    ## Membench:  one iteration, current commit
+	nix build .#membench-node-this-1.batch-report      --out-link result-batch-1-report
+membench-1-at: ## Membench:  one iteration, set commit by:  make membench-1-at REV=[master]
+	nix build .#membench-node-measured-1.batch-report  --out-link result-batch-1-report --override-input node-measured github:input-output-hk/cardano-node/${REV}
+membench-5:    ## Membench:  5 iterations, current commit
+	nix build .#membench-node-this-5.batch-report      --out-link result-batch-5-report
+membench-5-at: ## Membench:  5 iterations, set commit by:  make membench-5-at REV=[master]
+	nix build .#membench-node-this-5.batch-report      --out-link result-batch-5-report --override-input node-measured github:input-output-hk/cardano-node/${REV}
 
 shell: ## Enter Nix shell, CI mode (workbench run from Nix store)
 	nix-shell --max-jobs 8 --cores 0 --show-trace --argstr profileName ${PROFILE} ${ARGS}
