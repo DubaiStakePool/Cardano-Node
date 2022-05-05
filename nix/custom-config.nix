@@ -3,9 +3,11 @@ self: {
   localCluster = {
     cacheDir    = "${self.localCluster.stateDir}/.cache";
     stateDir    = "run/current";
+    batchName   = "plain";
     profileName = "default-alzo";
     basePort    = 30000;
     autoStartCluster = false;
+    autoStartClusterArgs = "";
     enableEKG        = true;
     workbenchDevMode = false;
     extraSupervisorConfig = {};

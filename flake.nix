@@ -98,7 +98,7 @@
 
         packages = {
           inherit (devShell) devops;
-          inherit (pkgs) cardano-node-profiled cardano-node-eventlogged cardano-node-asserted tx-generator-profiled locli-profiled db-analyser;
+          inherit (pkgs) cardano-node-profiled cardano-node-eventlogged cardano-node-asserted tx-generator-profiled db-analyser;
         }
         // scripts
         // exes

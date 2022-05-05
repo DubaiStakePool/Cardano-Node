@@ -50,8 +50,8 @@ let
   haveGlibcLocales = pkgs.glibcLocales != null && stdenv.hostPlatform.libc == "glibc";
 
   shell =
-    let cluster = pkgs.workbench-supervisord
-      { inherit haskellPackages profileName;
+    let cluster = pkgs.supervisord-workbench-for-profile
+      { inherit profileName;
         useCabalRun = true;
       };
     in cardanoNodeProject.shellFor {
@@ -97,10 +97,10 @@ let
     ## because psmisc fails to build on Big Sur.
     ++ lib.optionals (!stdenv.isDarwin)
     [
-      pkgs.psmisc
-      cluster.start
-      cluster.stop
-      cluster.restart
+      pkgs.pstree
+      cluster.interactive-start
+      cluster.interactive-stop
+      cluster.interactive-restart
     ];
 
     # Prevents cabal from choosing alternate plans, so that
@@ -110,7 +110,8 @@ let
     shellHook = ''
       echo 'nix-shell top-level shellHook:  withHoogle=${toString withHoogle} profileName=${profileName} autoStartCluster=${toString autoStartCluster} workbenchDevMode=${toString workbenchDevMode}'
 
-      ${cluster.workbench.shellHook}
+      ${with customConfig.localCluster;
+        (import ./nix/workbench/shell.nix { inherit lib workbenchDevMode; useCabalRun = true; }).shellHook}
 
       ${lib.optionalString autoStartCluster ''
       function atexit() {
@@ -160,9 +161,8 @@ let
       cluster.restart
       cardanolib-py
       cluster.workbench.workbench
-    ] ++ (lib.optionals (!stdenv.isDarwin) [
-      psmisc
-    ]);
+      pstree
+    ];
 
     # Prevents cabal from choosing alternate plans, so that
     # *all* dependencies are provided by Nix.
@@ -175,7 +175,8 @@ let
 
       wb explain-mode
 
-      ${cluster.workbench.shellHook}
+      ${with customConfig.localCluster;
+        (import ./nix/workbench/shell.nix { inherit lib workbenchDevMode; useCabalRun = false; }).shellHook}
 
       # Socket path default to first node launched by "start-cluster":
       export CARDANO_NODE_SOCKET_PATH=$(wb backend get-node-socket-path ${cluster.stateDir})

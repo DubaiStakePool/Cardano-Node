@@ -39,7 +39,6 @@ let
 
       cardano-cli
       cardano-topology
-      locli
     ];
 
   runWorkbench =
