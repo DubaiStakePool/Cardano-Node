@@ -1,56 +1,38 @@
-{ lib
-, stdenv
-, pkgs
-, git
-, graphviz
-, jq
-, moreutils
-, makeWrapper
-, runCommand
-, customConfig
-, cardano-cli
-, cardano-topology
-, locli
-
-, useCabalRun
+{ pkgs
+, lib, jq, runCommand
+, cardanoNodePackages
 }:
 
-with lib; with customConfig.localCluster;
+with lib;
 
 let
-  nixWbMode =
-    if useCabalRun
-    then "cabal-exes+nix-wb"
-    else "nix-exes+nix-wb";
-
   workbench' = tools:
-    stdenv.mkDerivation {
+    pkgs.stdenv.mkDerivation {
       pname = "workbench";
 
       version = "0.1";
 
       src = ./.;
 
-      buildInputs = [ jq makeWrapper ];
+      buildInputs = with pkgs; [ jq makeWrapper ];
 
       buildPhase = ''
         patchShebangs .
       '';
 
       postFixup = ''
-        wrapProgram "$out/bin/wb" --argv0 wb --add-flags "--set-mode ${nixWbMode}" \
-        --prefix PATH ":" ${pkgs.lib.makeBinPath tools}
+        wrapProgram "$out/bin/wb" --argv0 wb --prefix PATH ":" ${makeBinPath tools}
       '';
 
       installPhase = ''
         mkdir -p         $out/bin
-        cp -a wb profiles *.sh *.jq $out/bin
+        cp -a wb chain-filters profiles *.sh *.jq $out/bin
       '';
 
       dontStrip = true;
     };
 
-  workbench = workbench'
+  workbench = with cardanoNodePackages; with pkgs; workbench'
     [ git graphviz
       jq
       moreutils
@@ -69,7 +51,7 @@ let
   runWorkbenchJqOnly =
     name: command:
     runCommand name {} ''
-      ${workbench' [jq moreutils]}/bin/wb ${command} > $out
+      ${workbench' (with pkgs; [jq moreutils])}/bin/wb ${command} > $out
     '';
 
   runJq =
@@ -79,45 +61,15 @@ let
       ${jq}/bin/jq '${query}' "''${args[@]}" > $out
     '';
 
-  exeCabalOp = op: exe:
-    toString [ "cabal" "-v0" op "--" "exe:${exe}"];
+  profile-names-json =
+    runWorkbenchJqOnly "profile-names.json" "profiles list";
 
-  checkoutWbMode =
-    if useCabalRun
-    then "cabal-exes+checkout-wb"
-    else "nix-exes+checkout-wb";
+  profile-names =
+    __fromJSON (__readFile profile-names-json);
 
-  shellHook = ''
-    echo 'workbench shellHook:  workbenchDevMode=${toString workbenchDevMode} useCabalRun=${toString useCabalRun}'
-    export WORKBENCH_BACKEND=supervisor
-
-    ${optionalString
-      workbenchDevMode
-    ''
-    export WORKBENCH_CARDANO_NODE_REPO_ROOT=$(git rev-parse --show-toplevel)
-    export WORKBENCH_EXTRA_FLAGS=
-
-    function wb() {
-      $WORKBENCH_CARDANO_NODE_REPO_ROOT/nix/workbench/wb --set-mode ${checkoutWbMode} $WORKBENCH_EXTRA_FLAGS "$@"
-    }
-    export -f wb
-    ''}
-
-    ${optionalString
-      useCabalRun
-      ''
-      . nix/workbench/lib.sh
-      . nix/workbench/lib-cabal.sh
-      ''}
-
-    export CARDANO_NODE_SOCKET_PATH=run/current/node-0/node.socket
-    '';
-
-  generateProfiles =
-    { pkgs
-
+  all-profiles =
     ## The backend is an attrset of AWS/supervisord-specific methods and parameters.
-    , backend
+    { backend
 
     ## Environment arguments:
     ##   - either affect semantics on all backends equally,
@@ -125,26 +77,6 @@ let
     , envArgs
     }:
     rec {
-      profile-names-json =
-        runWorkbenchJqOnly "profile-names.json" "profiles list";
-
-      profile-names =
-        __fromJSON (__readFile profile-names-json);
-
-      environment =
-        ## IMPORTANT:  keep in sync with envArgs in 'supervisord-cluster/default.nix/envArgs'.
-        with envArgs; rec {
-          inherit cardanoLib stateDir;
-
-          JSON = runWorkbenchJqOnly "environment.json"
-          ''env compute-config \
-            --cache-dir "${cacheDir}" \
-            --base-port ${toString basePort} \
-            ${optionalString staggerPorts "--stagger-ports"} \
-          '';
-          value = __fromJSON (__readFile JSON);
-        };
-
       mkProfile =
         profileName:
         pkgs.callPackage ./profiles
@@ -152,70 +84,53 @@ let
               pkgs
               runWorkbenchJqOnly runJq workbench
               backend
-              environment
               profileName;
           };
 
-      profiles = genAttrs profile-names mkProfile;
+      value = genAttrs profile-names mkProfile;
 
-      profilesJSON =
-        runWorkbenchJqOnly "all-profiles.json" "profiles generate-all";
+      JSON = pkgs.writeText "all-profiles.json" (__toJSON (mapAttrs (_: x: x.value) value));
     };
 
-  ## ## This allows forwarding of Nix-expressed computation results to bash-land.
-  profileOutput =
-    { profile
-    , backendProfileOutput ## Backend-specific results for forwarding
-    }:
-    runCommand "workbench-profile-outputs-${profile.name}"
-      { buildInputs = [];
-        nodeServices =
-          __toJSON
-          (flip mapAttrs profile.node-services
-            (name: svc:
-              with svc;
-              { inherit name;
-                service-config = serviceConfig.JSON;
-                start          = startupScript;
-                config         = nodeConfig.JSON;
-                topology       = topology.JSON;
-              }));
-        generatorService =
-          with profile.generator-service;
-          __toJSON
-          { name           = "generator";
-            service-config = serviceConfig.JSON;
-            start          = startupScript;
-            run-script     = runScript.JSON;
-          };
-        passAsFile = [ "nodeServices" "generatorService" ];
-      }
-      ''
-      mkdir $out
-      cp    ${backendProfileOutput}/*  $out
-      cp    $nodeServicesPath          $out/node-services.json
-      cp    $generatorServicePath      $out/generator-service.json
-      '';
+  ## materialise-profile :: ProfileNix -> BackendProfile -> Profile
+  materialise-profile      = import ./profile.nix  { inherit pkgs lib; };
+  ## profile-topology :: ProfileNix -> Topology
+  profile-topology         = import ./topology.nix { inherit pkgs; };
+  ## profile-topology :: ProfileNix -> Topology -> Genesis
+  profile-topology-genesis = import ./genesis.nix  { inherit pkgs; };
 
-  with-workbench-profile =
-    { pkgs, backend, envArgs, profileName }:
+  with-profile =
+    { backend, envArgs, profileName }:
     let
-      workbenchProfiles = generateProfiles
-        { inherit pkgs backend envArgs; };
+      ps = all-profiles { inherit backend envArgs; };
 
-      profile = workbenchProfiles.profiles."${profileName}"
-        or (throw "No such profile: ${profileName};  Known profiles: ${toString (__attrNames workbenchProfiles.profiles)}");
+      profileNix = ps.value."${profileName}"
+        or (throw "No such profile: ${profileName};  Known profiles: ${toString (__attrNames ps.value)}");
 
-      profileOut = profileOutput
-        { inherit profile;
-          backendProfileOutput =
-            backend.profileOutput { inherit profile; };
+      profile = materialise-profile
+        { inherit profileNix workbench;
+          backendProfile =
+            backend.materialise-profile { inherit profileNix; };
         };
-    in { inherit profile profileOut; };
 
-in
-{
-  inherit workbench runWorkbench runJq with-workbench-profile;
+      topology = profile-topology { inherit profileNix profile; };
 
-  inherit generateProfiles profileOutput shellHook;
+      genesis = profile-topology-genesis { inherit profileNix profile topology; };
+    in {
+      inherit
+        profileNix profile
+        topology
+        genesis;
+    };
+
+  run-analysis = import ./analyse.nix;
+
+in {
+  inherit runJq;
+
+  inherit workbench' workbench runWorkbench runWorkbenchJqOnly;
+
+  inherit all-profiles profile-names profile-names-json with-profile;
+
+  inherit run-analysis;
 }

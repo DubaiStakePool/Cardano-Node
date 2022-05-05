@@ -1,0 +1,2645 @@
+diff --git a/nix/workbench/analyse.nix b/nix/workbench/analyse.nix
+new file mode 100644
+index 000000000..3518e1b39
+--- /dev/null
++++ b/nix/workbench/analyse.nix
+@@ -0,0 +1,37 @@
++{ pkgs
++, workbench
++, profileNix
++, run
++, trace ? false }:
++
++pkgs.runCommand "workbench-run-analysis-${profileNix.name}"
++  { requiredSystemFeatures = [ "benchmark" ];
++    nativeBuildInputs = with pkgs.haskellPackages; with pkgs;
++      [ bash coreutils gnused jq moreutils nixWrapped workbench.workbench ];
++  }
++  ''
++  echo "analysing run:  ${run}"
++  mkdir -p $out/nix-support
++
++  ln -s ${run} $out/run
++
++  cmd=(
++      wb
++      ${pkgs.lib.optionalString trace "--trace"}
++      analyse
++      # --filters size-full
++      --outdir  $out
++      standard
++      ${run}
++      )
++  echo "''${cmd[*]}" > $out/wb-analyse.sh
++
++  ''${cmd[@]} 2>&1 |
++      tee $out/wb-analyse.log
++
++  cat > $out/nix-support/hydra-build-products <<EOF
++  report block-propagation      $out block-propagation.txt
++  report node-1-timeline        $out logs-node-1.timeline.txt
++  report block-propagation.json $out block-propagation.json
++  EOF
++  ''
+diff --git a/nix/workbench/analyse.sh b/nix/workbench/analyse.sh
+index 33656c2c2..e0c164974 100644
+--- a/nix/workbench/analyse.sh
++++ b/nix/workbench/analyse.sh
+@@ -20,7 +20,7 @@ EOF
+ }
+ 
+ analyse() {
+-local dump_logobjects= force_prefilter= prefilter_jq= self_args=() locli_args=() filters=() aws=
++local dump_logobjects= force_prefilter= prefilter_jq= self_args=() locli_args=() filters=() aws= outdir=
+ while test $# -gt 0
+ do case "$1" in
+        --dump-logobjects )  dump_logobjects='true';  self_args+=($1);;
+@@ -28,7 +28,7 @@ do case "$1" in
+        --prefilter-jq )     prefilter_jq='true';     self_args+=($1);;
+        --filters )          local filter_names=('base')
+                             filter_names+=($(echo $2 | sed 's_,_ _'))
+-                            local filter_paths=(${filter_names[*]/#/"bench/chain-filters/"})
++                            local filter_paths=(${filter_names[*]/#/"$global_basedir/chain-filters/"})
+                             local filter_files=(${filter_paths[*]/%/.json})
+                             for f in ${filter_files[*]}
+                             do test -f "$f" ||
+@@ -36,9 +36,10 @@ do case "$1" in
+                             locli_args+=(${filter_files[*]/#/--filter })
+                             self_args+=($1 $2); shift;;
+        --rts )              self_args+=($1 $2); locli_args+=(+RTS $2         -RTS); shift;;
++       --outdir )           self_args+=($1 "$2"); outdir=$2; shift;;
+        * ) break;; esac; shift; done
+ 
+-if ! curl http://169.254.169.254/latest/meta-data 2>&1 | grep --quiet 404
++if ! curl --connect-timeout=0.5 http://169.254.169.254/latest/meta-data 2>&1 | grep --quiet 404
+ then aws='true'; fi
+ 
+ ## Work around the odd parallelism bug killing performance on AWS:
+@@ -75,7 +76,7 @@ case "$op" in
+         local dir=$(run get "$name")
+         test -n "$dir" || fail "malformed run: $name"
+ 
+-        local adir=$dir/analysis
++        local adir=${outdir:-$dir/analysis}
+         mkdir -p "$adir"
+ 
+         ## 0. subset what we care about into the keyfile
+@@ -137,7 +138,7 @@ case "$op" in
+         local dir=$(run get "$name")
+         test -n "$dir" || fail "malformed run: $name"
+ 
+-        local adir=$dir/analysis
++        local adir=${outdir:-$dir/analysis}
+         mkdir -p "$adir"
+ 
+         ## 0. subset what we care about into the keyfile
+diff --git a/nix/workbench/backend.sh b/nix/workbench/backend.sh
+index 96f31bfbb..f5105b44e 100644
+--- a/nix/workbench/backend.sh
++++ b/nix/workbench/backend.sh
+@@ -8,10 +8,6 @@ usage_backend() {
+                      Given a run directory, print the node socket path
+                        for 'cardano-cli'
+ 
+-    record-extended-env-config ENV-JSON [ENV-CONFIG-OPTS..]
+-                     Extend the environment JSON file with backend-specific
+-                       environment config
+-
+     allocate-run RUNDIR
+     describe-run RUNDIR
+     start-cluster RUNDIR
+diff --git a/nix/workbench/chain-filters/base-k10.json b/nix/workbench/chain-filters/base-k10.json
+new file mode 100644
+index 000000000..bdcdb3395
+--- /dev/null
++++ b/nix/workbench/chain-filters/base-k10.json
+@@ -0,0 +1,19 @@
++[ { "tag": "CSlot"
++  , "contents":
++    { "tag": "EpochGEq"
++    , "contents": 2
++    }
++  }
++, { "tag": "CSlot"
++  , "contents":
++    { "tag": "SlotLEq"
++    , "contents": 37000
++    }
++  }
++, { "tag": "CBlock"
++  , "contents":
++    { "tag": "BUnitaryChainDelta"
++    , "contents": true
++    }
++  }
++]
+diff --git a/nix/workbench/chain-filters/base.json b/nix/workbench/chain-filters/base.json
+new file mode 100644
+index 000000000..cb950994d
+--- /dev/null
++++ b/nix/workbench/chain-filters/base.json
+@@ -0,0 +1,19 @@
++[ { "tag": "CSlot"
++  , "contents":
++    { "tag": "EpochGEq"
++    , "contents": 2
++    }
++  }
++, { "tag": "CSlot"
++  , "contents":
++    { "tag": "SlotLEq"
++    , "contents": 56000
++    }
++  }
++, { "tag": "CBlock"
++  , "contents":
++    { "tag": "BUnitaryChainDelta"
++    , "contents": true
++    }
++  }
++]
+diff --git a/nix/workbench/chain-filters/no-ebnd.json b/nix/workbench/chain-filters/no-ebnd.json
+new file mode 100644
+index 000000000..542f3b43d
+--- /dev/null
++++ b/nix/workbench/chain-filters/no-ebnd.json
+@@ -0,0 +1,7 @@
++[ { "tag": "CSlot"
++  , "contents":
++    { "tag": "EpSlotGEq"
++    , "contents": 200
++    }
++  }
++]
+diff --git a/nix/workbench/chain-filters/no-rewards.json b/nix/workbench/chain-filters/no-rewards.json
+new file mode 100644
+index 000000000..4988007a0
+--- /dev/null
++++ b/nix/workbench/chain-filters/no-rewards.json
+@@ -0,0 +1,13 @@
++[ { "tag": "CSlot"
++  , "contents":
++    { "tag": "EpochSafeIntLEq"
++    , "contents": 3
++    }
++  }
++, { "tag": "CSlot"
++  , "contents":
++    { "tag": "EpochSafeIntGEq"
++    , "contents": 8
++    }
++  }
++]
+diff --git a/nix/workbench/chain-filters/rewards.json b/nix/workbench/chain-filters/rewards.json
+new file mode 100644
+index 000000000..8c8507bd1
+--- /dev/null
++++ b/nix/workbench/chain-filters/rewards.json
+@@ -0,0 +1,13 @@
++[ { "tag": "CSlot"
++  , "contents":
++    { "tag": "EpochSafeIntGEq"
++    , "contents": 4
++    }
++  }
++, { "tag": "CSlot"
++  , "contents":
++    { "tag": "EpochSafeIntLEq"
++    , "contents": 7
++    }
++  }
++]
+diff --git a/nix/workbench/chain-filters/size-full.json b/nix/workbench/chain-filters/size-full.json
+new file mode 100644
+index 000000000..2fe94ab0b
+--- /dev/null
++++ b/nix/workbench/chain-filters/size-full.json
+@@ -0,0 +1,7 @@
++[ { "tag": "CBlock"
++  , "contents":
++    { "tag": "BFullnessGEq"
++    , "contents": 0.9
++    }
++  }
++]
+diff --git a/nix/workbench/chain-filters/size-mid.json b/nix/workbench/chain-filters/size-mid.json
+new file mode 100644
+index 000000000..d48a8be52
+--- /dev/null
++++ b/nix/workbench/chain-filters/size-mid.json
+@@ -0,0 +1,13 @@
++[ { "tag": "CBlock"
++  , "contents":
++    { "tag": "BFullnessGEq"
++    , "contents": 0.1
++    }
++  }
++, { "tag": "CBlock"
++  , "contents":
++    { "tag": "BFullnessLEq"
++    , "contents": 0.9
++    }
++  }
++]
+diff --git a/nix/workbench/chain-filters/size-small.json b/nix/workbench/chain-filters/size-small.json
+new file mode 100644
+index 000000000..96380c852
+--- /dev/null
++++ b/nix/workbench/chain-filters/size-small.json
+@@ -0,0 +1,13 @@
++[ { "tag": "CBlock"
++  , "contents":
++    { "tag": "BFullnessGEq"
++    , "contents": 0.03
++    }
++  }
++, { "tag": "CBlock"
++  , "contents":
++    { "tag": "BFullnessLEq"
++    , "contents": 0.1
++    }
++  }
++]
+diff --git a/nix/workbench/default.nix b/nix/workbench/default.nix
+index 4681eb6ee..b73c20972 100644
+--- a/nix/workbench/default.nix
++++ b/nix/workbench/default.nix
+@@ -1,56 +1,38 @@
+-{ lib
+-, stdenv
+-, pkgs
+-, git
+-, graphviz
+-, jq
+-, moreutils
+-, makeWrapper
+-, runCommand
+-, customConfig
+-, cardano-cli
+-, cardano-topology
+-, locli
+-
+-, useCabalRun
++{ pkgs
++, lib, jq, runCommand
++, cardanoNodePackages
+ }:
+ 
+-with lib; with customConfig.localCluster;
++with lib;
+ 
+ let
+-  nixWbMode =
+-    if useCabalRun
+-    then "cabal-exes+nix-wb"
+-    else "nix-exes+nix-wb";
+-
+   workbench' = tools:
+-    stdenv.mkDerivation {
++    pkgs.stdenv.mkDerivation {
+       pname = "workbench";
+ 
+       version = "0.1";
+ 
+       src = ./.;
+ 
+-      buildInputs = [ jq makeWrapper ];
++      buildInputs = with pkgs; [ jq makeWrapper ];
+ 
+       buildPhase = ''
+         patchShebangs .
+       '';
+ 
+       postFixup = ''
+-        wrapProgram "$out/bin/wb" --argv0 wb --add-flags "--set-mode ${nixWbMode}" \
+-        --prefix PATH ":" ${pkgs.lib.makeBinPath tools}
++        wrapProgram "$out/bin/wb" --argv0 wb --prefix PATH ":" ${makeBinPath tools}
+       '';
+ 
+       installPhase = ''
+         mkdir -p         $out/bin
+-        cp -a wb profiles *.sh *.jq $out/bin
++        cp -a wb chain-filters profiles *.sh *.jq $out/bin
+       '';
+ 
+       dontStrip = true;
+     };
+ 
+-  workbench = workbench'
++  workbench = with cardanoNodePackages; with pkgs; workbench'
+     [ git graphviz
+       jq
+       moreutils
+@@ -69,7 +51,7 @@ let
+   runWorkbenchJqOnly =
+     name: command:
+     runCommand name {} ''
+-      ${workbench' [jq moreutils]}/bin/wb ${command} > $out
++      ${workbench' (with pkgs; [jq moreutils])}/bin/wb ${command} > $out
+     '';
+ 
+   runJq =
+@@ -79,45 +61,15 @@ let
+       ${jq}/bin/jq '${query}' "''${args[@]}" > $out
+     '';
+ 
+-  exeCabalOp = op: exe:
+-    toString [ "cabal" "-v0" op "--" "exe:${exe}"];
+-
+-  checkoutWbMode =
+-    if useCabalRun
+-    then "cabal-exes+checkout-wb"
+-    else "nix-exes+checkout-wb";
+-
+-  shellHook = ''
+-    echo 'workbench shellHook:  workbenchDevMode=${toString workbenchDevMode} useCabalRun=${toString useCabalRun}'
+-    export WORKBENCH_BACKEND=supervisor
+-
+-    ${optionalString
+-      workbenchDevMode
+-    ''
+-    export WORKBENCH_CARDANO_NODE_REPO_ROOT=$(git rev-parse --show-toplevel)
+-    export WORKBENCH_EXTRA_FLAGS=
+-
+-    function wb() {
+-      $WORKBENCH_CARDANO_NODE_REPO_ROOT/nix/workbench/wb --set-mode ${checkoutWbMode} $WORKBENCH_EXTRA_FLAGS "$@"
+-    }
+-    export -f wb
+-    ''}
+-
+-    ${optionalString
+-      useCabalRun
+-      ''
+-      . nix/workbench/lib.sh
+-      . nix/workbench/lib-cabal.sh
+-      ''}
+-
+-    export CARDANO_NODE_SOCKET_PATH=run/current/node-0/node.socket
+-    '';
++  profile-names-json =
++    runWorkbenchJqOnly "profile-names.json" "profiles list";
+ 
+-  generateProfiles =
+-    { pkgs
++  profile-names =
++    __fromJSON (__readFile profile-names-json);
+ 
++  all-profiles =
+     ## The backend is an attrset of AWS/supervisord-specific methods and parameters.
+-    , backend
++    { backend
+ 
+     ## Environment arguments:
+     ##   - either affect semantics on all backends equally,
+@@ -125,26 +77,6 @@ let
+     , envArgs
+     }:
+     rec {
+-      profile-names-json =
+-        runWorkbenchJqOnly "profile-names.json" "profiles list";
+-
+-      profile-names =
+-        __fromJSON (__readFile profile-names-json);
+-
+-      environment =
+-        ## IMPORTANT:  keep in sync with envArgs in 'supervisord-cluster/default.nix/envArgs'.
+-        with envArgs; rec {
+-          inherit cardanoLib stateDir;
+-
+-          JSON = runWorkbenchJqOnly "environment.json"
+-          ''env compute-config \
+-            --cache-dir "${cacheDir}" \
+-            --base-port ${toString basePort} \
+-            ${optionalString staggerPorts "--stagger-ports"} \
+-          '';
+-          value = __fromJSON (__readFile JSON);
+-        };
+-
+       mkProfile =
+         profileName:
+         pkgs.callPackage ./profiles
+@@ -152,70 +84,53 @@ let
+               pkgs
+               runWorkbenchJqOnly runJq workbench
+               backend
+-              environment
+               profileName;
+           };
+ 
+-      profiles = genAttrs profile-names mkProfile;
++      value = genAttrs profile-names mkProfile;
+ 
+-      profilesJSON =
+-        runWorkbenchJqOnly "all-profiles.json" "profiles generate-all";
++      JSON = pkgs.writeText "all-profiles.json" (__toJSON (mapAttrs (_: x: x.value) value));
+     };
+ 
+-  ## ## This allows forwarding of Nix-expressed computation results to bash-land.
+-  profileOutput =
+-    { profile
+-    , backendProfileOutput ## Backend-specific results for forwarding
+-    }:
+-    runCommand "workbench-profile-outputs-${profile.name}"
+-      { buildInputs = [];
+-        nodeServices =
+-          __toJSON
+-          (flip mapAttrs profile.node-services
+-            (name: svc:
+-              with svc;
+-              { inherit name;
+-                service-config = serviceConfig.JSON;
+-                start          = startupScript;
+-                config         = nodeConfig.JSON;
+-                topology       = topology.JSON;
+-              }));
+-        generatorService =
+-          with profile.generator-service;
+-          __toJSON
+-          { name           = "generator";
+-            service-config = serviceConfig.JSON;
+-            start          = startupScript;
+-            run-script     = runScript.JSON;
+-          };
+-        passAsFile = [ "nodeServices" "generatorService" ];
+-      }
+-      ''
+-      mkdir $out
+-      cp    ${backendProfileOutput}/*  $out
+-      cp    $nodeServicesPath          $out/node-services.json
+-      cp    $generatorServicePath      $out/generator-service.json
+-      '';
++  ## materialise-profile :: ProfileNix -> BackendProfile -> Profile
++  materialise-profile      = import ./profile.nix  { inherit pkgs lib; };
++  ## profile-topology :: ProfileNix -> Topology
++  profile-topology         = import ./topology.nix { inherit pkgs; };
++  ## profile-topology :: ProfileNix -> Topology -> Genesis
++  profile-topology-genesis = import ./genesis.nix  { inherit pkgs; };
+ 
+-  with-workbench-profile =
+-    { pkgs, backend, envArgs, profileName }:
++  with-profile =
++    { backend, envArgs, profileName }:
+     let
+-      workbenchProfiles = generateProfiles
+-        { inherit pkgs backend envArgs; };
++      ps = all-profiles { inherit backend envArgs; };
+ 
+-      profile = workbenchProfiles.profiles."${profileName}"
+-        or (throw "No such profile: ${profileName};  Known profiles: ${toString (__attrNames workbenchProfiles.profiles)}");
++      profileNix = ps.value."${profileName}"
++        or (throw "No such profile: ${profileName};  Known profiles: ${toString (__attrNames ps.value)}");
+ 
+-      profileOut = profileOutput
+-        { inherit profile;
+-          backendProfileOutput =
+-            backend.profileOutput { inherit profile; };
++      profile = materialise-profile
++        { inherit profileNix workbench;
++          backendProfile =
++            backend.materialise-profile { inherit profileNix; };
+         };
+-    in { inherit profile profileOut; };
+ 
+-in
+-{
+-  inherit workbench runWorkbench runJq with-workbench-profile;
++      topology = profile-topology { inherit profileNix profile; };
++
++      genesis = profile-topology-genesis { inherit profileNix profile topology; };
++    in {
++      inherit
++        profileNix profile
++        topology
++        genesis;
++    };
++
++  run-analysis = import ./analyse.nix;
++
++in {
++  inherit runJq;
++
++  inherit workbench' workbench runWorkbench runWorkbenchJqOnly;
++
++  inherit all-profiles profile-names profile-names-json with-profile;
+ 
+-  inherit generateProfiles profileOutput shellHook;
++  inherit run-analysis;
+ }
+diff --git a/nix/workbench/env.sh b/nix/workbench/env.sh
+index 99d25bfcb..75416d323 100644
+--- a/nix/workbench/env.sh
++++ b/nix/workbench/env.sh
+@@ -1,44 +1,24 @@
+-default_cacheDir="$HOME"/.cache/cardano-workbench
+-default_basePort=30000
++WORKBENCH_ENV_DEFAULT='
++{ "type":         "supervisor"
++, "cacheDir":     "'$HOME'/.cache/cardano-workbench"
++, "basePort":     30000
++, "staggerPorts": true
++}'
+ 
+-usage_env() {
+-     usage "env" "Environment setup" <<EOF
+-    compute-config [ENV-OPTS..]
+-                          Compute the environment configuration JSON.
+-                          The following environment config options are defined:
++export WORKBENCH_ENV=$WORKBENCH_ENV_DEFAULT
+ 
+-        --cache-dir DIR      Set the cache directory;  Defaults to $default_cachedir
+-        --base-port PORTNO   Set base port number;  Defaults to $default_basePort
+-        --stagger-ports      Whether to allocate different ports for each node;
+-                               Defaults to no port staggering
+-
+-EOF
++envjq() {
++    jq ".$1" <<<$WORKBENCH_ENV
+ }
+ 
+-env() {
+-local op=${1:---help)}; shift
+-
+-case "${op}" in
+-    compute-config )
+-        local usage="USAGE: wb run OPTS.. print-env-config"
+-
+-        local v=(
+-            --arg     cacheDir     "$default_cacheDir"
+-            --argjson basePort     "$default_basePort"
+-            --argjson staggerPorts 'false'
+-            )
+-
+-        while test $# -gt 0; do case "$1" in
+-           --cache-dir )     v=(--arg     cacheDir      "$2"  "${v[@]}"); shift;;
+-           --base-port )     v=(--argjson basePort       $2   "${v[@]}"); shift;;
+-           --stagger-ports ) v=(--argjson staggerPorts  true "${v[@]}");;
+-           * ) fatal "wb run print-env-config: unknown args: $*";; esac
+-           shift; done
++envjqr() {
++    jq -r ".$1" <<<$WORKBENCH_ENV
++}
+ 
+-        jq '{ cacheDir:      $cacheDir
+-            , basePort:      $basePort
+-            , staggerPorts:  $staggerPorts
+-            }' --null-input "${v[@]}";;
++setenvjq() {
++    export WORKBENCH_ENV=$(jq ". * { $1: $2 }" <<<$WORKBENCH_ENV)
++}
+ 
+-    * ) usage_env;; esac
++setenvjqstr() {
++    setenvjq "$1" "\"$2\""
+ }
+diff --git a/nix/workbench/genesis.nix b/nix/workbench/genesis.nix
+new file mode 100644
+index 000000000..5f68f7c46
+--- /dev/null
++++ b/nix/workbench/genesis.nix
+@@ -0,0 +1,34 @@
++{ pkgs }:
++
++{ profileNix, profile, topology }:
++pkgs.runCommand "workbench-profile-genesis-cache-${profileNix.name}"
++  { requiredSystemFeatures = [ "benchmark" ];
++    nativeBuildInputs = with pkgs.haskellPackages; with pkgs;
++      [ bash cardano-cli coreutils gnused jq moreutils workbench.workbench ];
++  }
++  ''
++  mkdir $out
++
++  cache_key_input=$(wb genesis profile-cache-key-input ${profileNix.JSON})
++  cache_key=$(wb genesis profile-cache-key ${profileNix.JSON})
++
++  keepalive() {
++      while test ! -e $out/profile; do echo 'keepalive for Hydra'; sleep 60s; done
++      echo 'keepalive done'
++  }
++  keepalive &
++
++  args=(
++     genesis actually-genesis
++     ${profileNix.JSON}
++     ${topology}
++     $out
++     "$cache_key_input"
++     "$cache_key"
++  )
++  time wb ''${args[@]}
++
++  touch done
++
++  ln -s ${profile} $out/profile
++  ''
+diff --git a/nix/workbench/genesis.sh b/nix/workbench/genesis.sh
+index 87ad12f0e..4f0a1492f 100644
+--- a/nix/workbench/genesis.sh
++++ b/nix/workbench/genesis.sh
+@@ -1,4 +1,4 @@
+-global_genesis_format_version=September-10-2021
++global_genesis_format_version=March-14-2022
+ 
+ usage_genesis() {
+      usage "genesis" "Genesis" <<EOF
+@@ -63,17 +63,13 @@ case "$op" in
+         if test -n "${regenesis_causes[*]}"
+         then msg "genesis: generating due to ${regenesis_causes[*]}:  $cache_key @$cache_path"
+              jqtest .genesis.single_shot "$profile_json" ||
+-                 fatal "Incremental (non single-shot) genesis is not suppored."
++                 fatal "Incremental (non single-shot) genesis is not supported."
+ 
+              if profile has-preset "$profile_json"
+              then local preset=$(jq .preset "$profile_json" -r)
+                   genesis genesis-from-preset "$preset" "$cache_path"
+-             else genesis actually-genesis "$profile_json" "$topo_dir" "$cache_path"
++             else genesis actually-genesis "$profile_json" "$topo_dir" "$cache_path" "$cache_key_input" "$cache_key"
+              fi
+-
+-             cat <<<$cache_key_input > "$cache_path"/cache.key.input
+-             cat <<<$cache_key       > "$cache_path"/cache.key
+-             cat <<<$global_genesis_format_version > "$cache_path"/layout.version
+         fi
+ 
+         genesis finalise-cache-entry "$profile_json" "$cache_path"
+@@ -172,6 +168,8 @@ case "$op" in
+         local profile_json=${1:?$usage}
+         local topo_dir=${2:?$usage}
+         local dir=${3:?$usage}
++        local cache_key_input=$4
++        local cache_key=$5
+ 
+         rm -rf   "$dir"/{*-keys,byron,pools,nodes,*.json,*.params,*.version}
+         mkdir -p "$dir"
+@@ -196,9 +194,46 @@ case "$op" in
+         mv "$dir"/genesis.json "$dir"/genesis-shelley.json
+         mv "$dir"/genesis.spec.json "$dir"/genesis-shelley.spec.json
+ 
++        cat <<<$cache_key_input               > "$dir"/cache.key.input
++        cat <<<$cache_key                     > "$dir"/cache.key
++        cat <<<$global_genesis_format_version > "$dir"/layout.version
++
+         ## TODO: try to get rid of this step:
+         Massage_the_key_file_layout_to_match_AWS "$profile_json" "$topo_dir" "$dir";;
+ 
++    derive-from-cache )
++        local usage="USAGE:  wb genesis $op PROFILE-OUT CACHE-ENTRY-DIR OUTDIR"
++        local profile=${1:?$usage}
++        local cache_entry=${2:?$usage}
++        local outdir=${3:?$usage}
++
++        msg "genesis | derive-from-cache:  $cache_entry -> $outdir"
++        ls -l $cache_entry
++
++        mkdir -p "$outdir"
++        ( cd $outdir
++          ln -s $profile   ./profile
++          ln -s $cache_entry cache-entry
++          ln -s $cache_entry/cache.key
++          ln -s $cache_entry/cache.key.input
++          ln -s $cache_entry/layout.version
++          ## keys
++          ln -s $cache_entry/delegate-keys
++          ln -s $cache_entry/genesis-keys
++          cp    $cache_entry/node-keys . -a
++          chmod -R    go-rwx node-keys
++          ln -s $cache_entry/pools
++          ln -s $cache_entry/stake-delegator-keys
++          ln -s $cache_entry/utxo-keys
++          ## JSON
++          cp -v $cache_entry/genesis*.json .
++          chmod u+w          genesis*.json
++        )
++        genesis finalise-cache-entry $profile/profile.json $outdir
++
++        ls -l $outdir/node-keys
++        ;;
++
+     finalise-cache-entry )
+         local usage="USAGE:  wb genesis $op PROFILE-JSON DIR"
+         local profile_json=${1:?$usage}
+diff --git a/nix/workbench/membench-batch-process.nix b/nix/workbench/membench-batch-process.nix
+new file mode 100644
+index 000000000..5db6162ee
+--- /dev/null
++++ b/nix/workbench/membench-batch-process.nix
+@@ -0,0 +1,18 @@
++{ lib, bash, runCommand, jq
++, input
++, batch
++, node-process
++}:
++
++runCommand "membench-results-${batch.batch-id}-process-${input.node-process.shortRev}.json" {
++  requiredSystemFeatures = [ "benchmark" ];
++  preferLocalBuild = true;
++  nativeBuildInputs = [ jq ];
++} ''
++  echo "membench | process:  processing batch ${batch.batch-id}"
++
++  ${bash}/bin/bash ${node-process}/bench/process/process.sh \
++    process < ${batch}/index.json > $out
++
++  cat $out
++''
+diff --git a/nix/workbench/membench-batch-report.nix b/nix/workbench/membench-batch-report.nix
+new file mode 100644
+index 000000000..35dbd8ed9
+--- /dev/null
++++ b/nix/workbench/membench-batch-report.nix
+@@ -0,0 +1,43 @@
++{ lib, bash, jq, runCommand
++, input, node-process
++, batch
++, batch-results
++, node-config-name ? "baseline"
++}:
++
++let
++  report-id = "${batch.batch-id}-config-${node-config-name}-report-${input.node-process.shortRev}";
++in
++runCommand "membench-report-${report-id}" {
++  requiredSystemFeatures = [ "benchmark" ];
++  preferLocalBuild = true;
++  buildInputs = [ jq ];
++} ''
++  echo "membench | report:  generating ${report-id}"
++
++  mkdir -p $out/nix-support
++
++  cd $out
++
++  ln -s ${batch}         batch
++  ln -s ${batch-results} batch-results.json
++
++  ${bash}/bin/bash ${node-process}/bench/process/process.sh \
++    render-html < ${batch-results} > $out/raw-data.html
++
++  ${bash}/bin/bash ${node-process}/bench/process/process.sh \
++    render      < ${batch-results} > $out/report.csv
++
++  cat > nix-support/hydra-build-products <<EOF
++  report raw-data $out raw-data.html
++  report testlog  $out report.csv
++  EOF
++
++  process_args=(
++    --config ${node-config-name}
++    )
++  ${bash}/bin/bash ${node-process}/bench/process/process.sh \
++    render-hydra-charts "''${process_args[@]}" \
++      < batch-results.json \
++      > $out/nix-support/hydra-metrics
++  ''
+diff --git a/nix/workbench/membench-batch.nix b/nix/workbench/membench-batch.nix
+new file mode 100644
+index 000000000..d78759861
+--- /dev/null
++++ b/nix/workbench/membench-batch.nix
+@@ -0,0 +1,73 @@
++{ lib, bash, jq, zstd, runCommand
++, membench-run, node-measured-rev
++, node-process
++, variantTable, nIterations ? 5
++}:
++
++with lib;
++let
++  ## From the variant table (Map Name RtsFlags), derive variants of the baseline:
++  allVariants =
++    mapAttrs
++      (name: args:
++        membench-run.override
++        (args // {
++          suffix   = "-${name}";
++        }))
++      variantTable;
++
++  ## For a given variant, derive its run iterations:
++  variantIterationsShell =
++    name: variant:
++    concatMapStringsSep "\n"
++      (currentIteration:
++        "ln -sv ${variant.override { inherit currentIteration; }} $out/${name}-${toString currentIteration}")
++      (range 1 nIterations);
++
++  ## Derive the (variants X iterations) cross product:
++  allVariantIterationsShell =
++    builtins.attrValues
++      (mapAttrs variantIterationsShell allVariants);
++
++  nVariants = length (__attrNames variantTable);
++  batch-id  = "${node-measured-rev}-${toString nVariants}vars-${toString nIterations}runs";
++
++in runCommand "membench-${batch-id}" {
++  requiredSystemFeatures = [ "benchmark" ];
++  preferLocalBuild = true;
++  nativeBuildInputs = [ jq zstd ];
++  passthru = {
++    inherit batch-id variantTable nIterations;
++  };
++} ''
++  mkdir -p $out/nix-support
++
++  ## 0. link the runs
++  ${concatStringsSep "\n" allVariantIterationsShell}
++
++  ## 1. index the linked runs
++  process_args=(
++    --no-progress
++    collect ${batch-id} membenches_v1 $out
++    )
++  ${bash}/bin/bash ${node-process}/bench/process/process.sh ''${process_args[*]} \
++    > $out/index.json
++
++  ## 2. Package
++  cd $out
++
++  tarname=membench-${batch-id}
++  tar -cf $tarname.tar.zst \
++     index.json         \
++     */*.json           \
++     */input/*.json     \
++     */input/highwater  \
++     */input/rts.dump   \
++     */input/stderr     \
++     --zstd
++
++  ## 3. Mark for Hydra publishing
++  cat > nix-support/hydra-build-products <<EOF
++  file binary-dist $out/$tarname.tar.zst
++  EOF
++''
+diff --git a/nix/workbench/membench-overlay.nix b/nix/workbench/membench-overlay.nix
+new file mode 100644
+index 000000000..d1e7a327a
+--- /dev/null
++++ b/nix/workbench/membench-overlay.nix
+@@ -0,0 +1,63 @@
++{ input
++, cardano-mainnet-mirror
++, node-snapshot
++, node-measured
++, node-process
++, customConfig
++, lib
++}:
++
++self: super:
++
++let
++  mkMembench =
++    nIterations: { node, rev }:
++    rec {
++      ## 4. Run batch:  profiles X iterations
++      batch = self.callPackage ./membench-batch.nix
++        { inherit (customConfig) variantTable;
++          inherit nIterations;
++          node-measured-rev = rev;
++
++          ## 3. Single run
++          membench-run = self.callPackage ./membench-run.nix
++            { inherit input;
++              inherit (customConfig) rtsflags rtsMemSize;
++              node-measured = node;
++              node-measured-rev = rev;
++            };
++        };
++      ## 5. Data aggregation and statistics
++      batch-results = self.callPackage ./membench-batch-process.nix
++        { inherit input batch; };
++
++      ## 6. Report generation
++      batch-report = self.callPackage ./membench-batch-report.nix
++        { inherit input batch batch-results; };
++    };
++  node-self-rev = input.self.rev or "0000000000000000000000000000000000000000";
++in
++{
++  ## Do not let this overlay escape -- exposure to other flakes will break down due to inputs being inherited.
++  ## 0. Chain
++  mainnet-chain = cardano-mainnet-mirror.defaultPackage.${self.system};
++
++  # TODO, fix this
++  #db-analyser = ouroboros-network-snapshot.haskellPackages.ouroboros-consensus-cardano.components.exes.db-analyser;
++
++  ## 1. Ledger snapshot
++  inherit node-snapshot;
++  db-analyser = node-snapshot.packages.${self.system}.db-analyser;
++  snapshot = self.callPackage ./snapshot.nix
++    { chain = self.mainnet-chain;
++      inherit (customConfig) snapshotSlot finalChunkNo shelleyGenesisHash;
++      inherit input;
++    };
++
++  inherit node-process;
++
++  membench-node-this-1     = mkMembench 1 { node = input.self;    rev = node-self-rev; };
++  membench-node-this-5     = mkMembench 5 { node = input.self;    rev = node-self-rev; };
++  membench-node-measured-1 = mkMembench 1 { node = node-measured; rev = input.node-measured.rev; };
++  membench-node-measured-5 = mkMembench 5 { node = node-measured; rev = input.node-measured.rev; };
++}
+diff --git a/nix/workbench/membench-run.nix b/nix/workbench/membench-run.nix
+new file mode 100644
+index 000000000..e81a5ff81
+--- /dev/null
++++ b/nix/workbench/membench-run.nix
+@@ -0,0 +1,154 @@
++{ runCommand, system, lib
++, jq, yq, strace, util-linux, e2fsprogs, gnugrep, procps, time, hexdump
++## Code
++, input, node-snapshot, node-measured, node-measured-rev
++## Parameters
++, snapshot
++, rtsflags, rtsMemSize
++, legacyTracing ? true
++## Iteration & nomenclature
++, currentIteration ? null
++, suffix ? ""
++}:
++
++let
++  flags = "${rtsflags} ${lib.optionalString (rtsMemSize != null) "-M${rtsMemSize}"}";
++  topology = { Producers = []; };
++  topologyPath = builtins.toFile "topology.json" (builtins.toJSON topology);
++  inVM = false;
++  ident = "node-${node-measured-rev}${suffix}-iter${toString currentIteration}";
++in
++  runCommand "membench-run-${ident}" {
++    buildInputs = [ node-measured hexdump jq strace util-linux procps time yq ];
++    inherit currentIteration;
++    requiredSystemFeatures = [ "benchmark" ];
++  } ''
++  mkdir -pv $out/nix-support
++
++  ${lib.optionalString inVM ''
++  echo 0 > /tmp/xchg/in-vm-exit
++
++  # never overcommit
++  echo 2 > /proc/sys/vm/overcommit_memory
++  ''}
++
++  pwd
++  free -m
++  cp -r ${snapshot}/chain chain
++  chmod -R +w chain
++
++  echo ${flags}
++
++  ls -ltrh chain
++  ${if legacyTracing
++    then
++      ''
++        jq '
++          .setupScribes =
++          [ .setupScribes[0] * { "scFormat":"ScJson" }
++          , { scFormat:"ScJson"
++            , scKind:"FileSK"
++            , scName:"log.json"
++            , scRotation:
++              { rpLogLimitBytes: 300000000
++              , rpMaxAgeHours:   24
++              , rpKeepFilesNum:  20
++              }
++            }
++          ]
++        | .defaultScribes =
++            .defaultScribes + [ [ "FileSK", "log.json" ] ]
++        | .options.mapBackends =
++            { "cardano.node.resources": [ "KatipBK" ] }
++        | delpaths([["options","mapSubtrace"]])
++        ' ${node-measured}/configuration/cardano/mainnet-config.json > config.json
++      ''
++    else
++      ''
++        yq '
++        .
++        | .TraceOptionResourceFreqency = 1000
++        ' ${node-measured}/configuration/cardano/mainnet-config-new-tracing.yaml > config.json
++      ''}
++  cp -v ${node-measured}/configuration/cardano/*-genesis.json .
++
++  args=( +RTS -s$out/rts.dump
++              ${flags}
++         -RTS
++         run
++         --database-path           chain/
++         --config                  config.json
++         --topology                ${topologyPath}
++         --shutdown-on-slot-synced 200000
++       )
++
++  # so the node wont get GC'd, and you could confirm the source it came from
++  ln -s ${node-measured.packages.${system}.cardano-node}/bin/cardano-node .
++
++  command time -f %M -o $out/highwater \
++    ./cardano-node "''${args[@]}" ${if legacyTracing
++                                    then ""
++                                    else " | grep '^{' > log.json"
++                                   } || true
++  test -f log.json || {
++    echo "FATAL: cardano-node did not create log.json"
++    exit 1
++  }
++
++  pwd
++  df -h
++  free -m
++
++  egrep '[Cc]ardano\.[Nn]ode\.[Rr]esources|ReplayFromSnapshot|ReplayedBlock|will terminate|Ringing the node shutdown|TookSnapshot' log.json > $out/summary.json
++
++  mv -vi log*json config.json $out/
++
++  ln -s ${snapshot} $out/chaindb
++  args=( --arg             measuredNodeRev  ${input.node-measured.rev}
++       )
++  jq '{ measuredNodeRev:  $measuredNodeRev
++      }
++     ' "''${args[@]}" > $out/run-info.json
++
++  cd $out
++
++  totaltime=$({ head -n1 log.json
++                tail -n1 log.json
++              } |
++              jq 'def katip_timestamp_to_iso8601:
++                    ${if legacyTracing
++                      then ".[:-4] + \"Z\""
++                      else ".[:10] + \"T\" + .[11:19] + \"Z\""}
++                     | fromdateiso8601;
++                  .
++                  | map(.at | katip_timestamp_to_iso8601)
++                  | .[1] - .[0]
++                 ' --slurp)
++  highwater=$(cat highwater | cut -d' ' -f6)
++
++  cat summary.json
++  jq '
++    def minavgmax:
++        length as $len
++      | { min: (min/1024/1024)
++        , avg: ((add / $len)/1024/1024)
++        , max: (max/1024/1024)
++        };
++
++      map(select(${if legacyTracing
++                   then ".ns[0] == \"cardano.node.resources\""
++                   else ".ns    == \"Cardano.Node.Resources\""}) | .data)
++    | { RSS:          map(.RSS) | minavgmax
++      , Heap:         map(.Heap) | minavgmax
++      , CentiCpuMax:  map(.CentiCpu) | max
++      , CentiMutMax:  map(.CentiMut) | max
++      , SecGC:       (map(.CentiGC) | max / 100)
++      , CentiBlkIO:   map(.CentiBlkIO) | max
++      , flags:       "${flags}"
++      , chain:       { startSlot: ${toString snapshot.snapshotSlot}
++                     , stopFile:  ${toString snapshot.finalChunkNo}
++                     }
++      , totaltime:   '$totaltime'
++      , pass:        true
++      }' --slurp summary.json > refined.json
++''
+diff --git a/nix/workbench/profile.nix b/nix/workbench/profile.nix
+new file mode 100644
+index 000000000..326485589
+--- /dev/null
++++ b/nix/workbench/profile.nix
+@@ -0,0 +1,39 @@
++{ pkgs, lib }:
++with lib;
++
++{ profileNix
++, backendProfile ## Backend-specific results for forwarding
++, workbench
++}:
++pkgs.runCommand "workbench-profile-output-${profileNix.name}"
++  { buildInputs = with pkgs; [ jq workbench ];
++    nodeServices =
++      __toJSON
++      (flip mapAttrs profileNix.node-services
++        (name: svc:
++          with svc;
++          { inherit name;
++            service-config = serviceConfig.JSON;
++            start          = startupScript;
++            config         = nodeConfig.JSON;
++            topology       = topology.JSON;
++          }));
++    generatorService =
++      with profileNix.generator-service;
++      __toJSON
++      { name           = "generator";
++        service-config = serviceConfig.JSON;
++        start          = startupScript;
++        run-script     = runScript.JSON;
++      };
++    passAsFile = [ "nodeServices" "generatorService" ];
++  }
++  ''
++  mkdir $out
++  cp    ${profileNix.JSON}         $out/profile.json
++  cp    ${backendProfile}/*        $out
++  cp    $nodeServicesPath          $out/node-services.json
++  cp    $generatorServicePath      $out/generator-service.json
++
++  wb profile node-specs $out/profile.json > $out/node-specs.json
++  ''
+diff --git a/nix/workbench/profile.sh b/nix/workbench/profile.sh
+index 17ece7060..dbab03f91 100644
+--- a/nix/workbench/profile.sh
++++ b/nix/workbench/profile.sh
+@@ -5,7 +5,7 @@ usage_profile() {
+     compose NAME..        Create a profile composed from named profiles
+     get NAME              Get contents of either named profile, or profile JSON desc
+     describe NAME         Print a human description of a profile
+-    node-specs PROFILE-NAME/JSON [ENV-JSON=$global_rundir_def/env.json]
++    node-specs PROFILE-NAME/JSON
+                           Print node specs JSON for the given profile and environment
+ EOF
+ }
+@@ -58,7 +58,7 @@ case "$op" in
+           | add
+           ';;
+ 
+-    get )
++    json-by-name )
+         local usage="USAGE: wb profile $op NAME"
+         local name=${1:?$usage}
+ 
+@@ -66,14 +66,13 @@ case "$op" in
+         then jq '.' "$name"
+         else profile generate-all |
+              jq '.["'$name'"]'
+-        fi
+-        ;;
++        fi;;
+ 
+     describe )
+         local usage="USAGE: wb profile $op NAME"
+         local name=${1:?$usage}
+ 
+-        profile get $name |
++        profile json-by-name $name |
+         (cd "$global_basedir/profiles";
+ 
+          echo -n "workbench:  "
+@@ -85,7 +84,7 @@ case "$op" in
+     has-preset )
+         local usage="USAGE: wb profile $op NAME"
+         local profile=${1:?$usage}
+-        profile get "$profile" | jqtest ".preset != null";;
++        profile json-by-name "$profile" | jqtest ".preset != null";;
+ 
+     preset-get-file )
+         local usage="USAGE: wb profile $op PRESET-NAME DESC FILE"
+@@ -101,16 +100,15 @@ case "$op" in
+         fi;;
+ 
+     node-specs )
+-        local usage="USAGE: wb profile $op PROFILE-NAME/JSON [ENV-JSON=$global_rundir_def/env.json]"
++        local usage="USAGE: wb profile $op PROFILE-NAME/JSON"
+         local profile=${1:?$usage}
+-        local env_json=${2:-$global_rundir_def/env.json}
+ 
+         local args=(
+-            --slurpfile env "$env_json"
++            --argjson env "$WORKBENCH_ENV"
+         )
+         ## WARNING: this is structured in correspondence
+         ##          with the output generated by cardano-topology
+-        profile get "$profile" | jq '. as $prof
++        profile json-by-name "$profile" | jq '. as $prof
+            | $prof.composition.n_bft_hosts  as $n_bfts
+            | $prof.composition.n_pool_hosts as $n_pools
+            | ([range(0;
+@@ -146,9 +144,9 @@ case "$op" in
+                     { name:       "node-\(.["i"])"
+                     , isProducer: ([.kind == "bft", .kind == "pool"] | any)
+                     , port:
+-                      (if $env[0].staggerPorts
+-                       then $env[0].basePort + .i
+-                       else $env[0].basePort
++                      (if $env.staggerPorts
++                       then $env.basePort + .i
++                       else $env.basePort
+                        end)
+                     }))
+            | map({ key: .name, value: .})
+diff --git a/nix/workbench/profiles/adhoc.jq b/nix/workbench/profiles/adhoc.jq
+index a883c3f46..e433d0d07 100644
+--- a/nix/workbench/profiles/adhoc.jq
++++ b/nix/workbench/profiles/adhoc.jq
+@@ -50,16 +50,6 @@ def adhoc_profiles:
+ 
+     , shelley:
+       { updateQuorum: 1
+-      , initialFunds:
+-        # genesis-utxo (used for pool owner funds and paying fees for startup scripts)
+-        { "608634fc2a05c3d7f8dca90321dae19a2172ab3ff146512660721fa15b": 1000000000000000
+-        # flee three produce crush token where quantum vessel seek include dance reject urge awesome lonely
+-        , "00da45b43746dec67dfe3647f3dfee9fb8bf0723883e40ca14b51234c8e62cf6242003415534e919acb2c07132a588827fb8e6b968861b1e5d807b756fe72d6e28": 100000000000000
+-        , "0036af4eaf83f34348829c0b88515238e3bbe7c7b69a5b3659bc3155521da98aa12003415534e919acb2c07132a588827fb8e6b968861b1e5d807b756fe72d6e28": 100000000000000
+-        , "00bee681d5f0dbd1b047c0311ab1211640f5f862c614d5db9e21fc08ddb163aba02003415534e919acb2c07132a588827fb8e6b968861b1e5d807b756fe72d6e28": 100000000000000
+-        , "00b84e9b8980d61ade5167f3e697641acae5e6eec546fcdbc5c03149a02595d4202003415534e919acb2c07132a588827fb8e6b968861b1e5d807b756fe72d6e28": 100000000000000
+-        , "000b04a2d5dc696f845a7bbe7ead094ac12e8dbbf82eedeabe9cb2fe8c07f1624c2003415534e919acb2c07132a588827fb8e6b968861b1e5d807b756fe72d6e28": 100000000000000
+-        }
+       }
+     }
+   }
+diff --git a/nix/workbench/profiles/cli-args.jq b/nix/workbench/profiles/cli-args.jq
+index d014a8ee1..1eb5af09a 100644
+--- a/nix/workbench/profiles/cli-args.jq
++++ b/nix/workbench/profiles/cli-args.jq
+@@ -1,14 +1,15 @@
+ def profile_cli_args($p):
++($p.genesis.per_pool_balance * $p.composition.n_pools) as $pools_balance
++|
+ { common:
+   { createSpec:
+-    [ "--supply",                  $p.genesis.total_balance
++    [ "--supply",                  ($pools_balance + $p.genesis.funds_balance)
+     , "--testnet-magic",           $p.genesis.network_magic
+     , "--gen-genesis-keys",        $p.composition.n_bft_hosts
+     , "--gen-utxo-keys",           1
+     ]
+  , createFinalIncremental:
+-    ([ "--supply",                 ($p.genesis.total_balance -
+-                                    $p.genesis.pools_balance)
++    ([ "--supply",                 ($p.genesis.funds_balance)
+      , "--gen-utxo-keys",          1
+      ] +
+      if $p.composition.dense_pool_density != 1
+@@ -16,11 +17,10 @@ def profile_cli_args($p):
+      [  ]
+      else [] end)
+   , createFinalBulk:
+-    ([ "--supply",                 ($p.genesis.total_balance -
+-                                    $p.genesis.pools_balance)
++    ([ "--supply",                 ($p.genesis.funds_balance)
+      , "--gen-utxo-keys",          1
+      , "--gen-genesis-keys",       $p.composition.n_bft_hosts
+-     , "--supply-delegated",       $p.genesis.pools_balance
++     , "--supply-delegated",       $pools_balance
+      , "--gen-pools",              $p.composition.n_pools
+      , "--gen-stake-delegs",       ([ $p.composition.n_pools
+                                     , $p.genesis.delegators ]
+diff --git a/nix/workbench/profiles/default.nix b/nix/workbench/profiles/default.nix
+index 8a870d6d4..e6f628462 100644
+--- a/nix/workbench/profiles/default.nix
++++ b/nix/workbench/profiles/default.nix
+@@ -1,21 +1,16 @@
+-{ pkgs
++{ pkgs, cardanoLib
+ , runCommand, runWorkbenchJqOnly, runJq, workbench, writeText
+ 
+ ## The backend is an attrset of AWS/supervisord-specific methods and parameters.
+ , backend
+ 
+-## Environmental settings:
+-##   - either affect semantics on all backends equally,
+-##   - or have no semantic effect
+-, environment
+-
+ , profileName
+ , profileOverride ? {}
+ }:
+ 
+ let
+   baseJSON = runWorkbenchJqOnly "profile-${profileName}.json"
+-                          "profile get ${profileName}";
++    "profile json-by-name ${profileName}";
+   JSON =
+     if profileOverride == {}
+     then baseJSON
+@@ -43,7 +38,7 @@ let
+         rec {
+           JSON = runWorkbenchJqOnly
+             "node-specs-${profile.name}.json"
+-            "profile node-specs ${profile.JSON} ${environment.JSON}";
++            "profile node-specs ${profile.JSON}";
+ 
+           value = __fromJSON (__readFile JSON);
+         };
+@@ -51,7 +46,7 @@ let
+       inherit (pkgs.callPackage
+                ./node-services.nix
+                { inherit runJq backend profile;
+-                 baseNodeConfig = environment.cardanoLib.environments.testnet.nodeConfig;
++                 baseNodeConfig = cardanoLib.environments.testnet.nodeConfig;
+                })
+         node-services;
+ 
+diff --git a/nix/workbench/profiles/defaults.jq b/nix/workbench/profiles/defaults.jq
+index a49991617..c49ea04d1 100644
+--- a/nix/workbench/profiles/defaults.jq
++++ b/nix/workbench/profiles/defaults.jq
+@@ -1,6 +1,6 @@
+ ## Testable with:
+ ##
+-##   jq -n 'include "defaults" { search: "nix/supervisord-cluster/profiles" }; era_defaults("alonzo")'
++##   jq -n 'include "defaults" { search: "nix/workbench/profiles" }; era_defaults("alonzo")'
+ ##
+ def era_defaults($era):
+ { common:
+@@ -13,11 +13,12 @@ def era_defaults($era):
+   , composition:
+     { locations:                      ["LO"]
+     , n_bft_hosts:                    0
+-    , n_singular_hosts:               2
++    , n_singular_hosts:               5
+     , n_dense_hosts:                  1
+     , dense_pool_density:             1
+     , with_proxy:                     false
+-    , with_observer:                  true
++    , with_observer:                  false
++    , topology:                       "uni-circle"
+     }
+ 
+   , genesis:
+@@ -28,8 +29,8 @@ def era_defaults($era):
+     , single_shot:                    true
+ 
+     ## UTxO & delegation
+-    , total_balance:                  900000000000000
+-    , pools_balance:                  800000000000000
++    , per_pool_balance:               1000000000000000
++    , funds_balance:                  10000000000000
+     , utxo:                           0
+     , decentralisation_param:         0
+ 
+diff --git a/nix/workbench/profiles/derived.jq b/nix/workbench/profiles/derived.jq
+index f53dbc3ef..15f61866d 100644
+--- a/nix/workbench/profiles/derived.jq
++++ b/nix/workbench/profiles/derived.jq
+@@ -12,15 +12,19 @@ def profile_name($p):
+ | era_defaults($p.era).generator   as   $generator_defaults
+ | era_defaults($p.era).composition as $composition_defaults
+ | era_defaults($p.era).node        as        $node_defaults
++| $p.node.shutdown_on_slot_synced  as                $slots
+   ## Genesis
+ | [ "k\($p.composition.n_pools)" ]
+   + if $p.composition.n_dense_hosts > 0
+     then may_attr("dense_pool_density";
+                   $p.composition; $composition_defaults; 1; "ppn")
+     else [] end
+-  + [ ($p.generator.epochs                  | tostring) + "ep"
+-    , ($p.generator.tx_count     | . / 1000 | tostring) + "kTx"
+-    , ($p.genesis.utxo           | . / 1000 | tostring) + "kU"
++  + if $slots
++    then [($p.node.shutdown_on_slot_synced | tostring) + "slots"]
++    else [ ($p.generator.epochs                  | tostring) + "ep"
++         , ($p.generator.tx_count     | . / 1000 | tostring) + "kTx" ]
++    end
++  + [ ($p.genesis.utxo           | . / 1000 | tostring) + "kU"
+     , ($p.genesis.delegators     | . / 1000 | tostring) + "kD"
+     , ($p.genesis.max_block_size | . / 1000 | tostring) + "kbs"
+     ]
+@@ -32,21 +36,19 @@ def profile_name($p):
+              $p.generator; $generator_defaults; 1; "i")
+   + may_attr("outputs_per_tx";
+              $p.generator; $generator_defaults; 1; "o")
+-  + if $p.generator.scriptMode
+-    then if $p.generator.plutusMode
+-         then [ ($p.generator.plutusScript | rtrimstr(".plutus"))
+-              , ($p.generator.plutusData | tostring)
+-              ]
+-         else ["scr"] end
+-    else ["cli"] end
++  + if $p.generator.plutusMode | not then []
++    else [ ($p.generator.plutusScript | rtrimstr(".plutus"))
++         , ($p.generator.plutusData | tostring)
++         ] end
+   + if $p.node.rts_flags_override == [] then []
+     else ["RTS", ($p.node.rts_flags_override | join(""))] end
+   + if $p.composition.with_proxy
+     then ["prox"]
+     else [] end
+-  + if $p.composition.with_observer | not
+-    then ["nobs"]
++  + if $p.composition.with_observer
++    then ["obsrv"]
+     else [] end
++  + if $p.scenario == "default" then [] else [$p.scenario] end
+   | join("-");
+ 
+ def profile_name_era_suffix($era):
+@@ -100,7 +102,7 @@ def add_derived_params:
+          { genesis_future_offset: $future_offset
+          , delegators:            ($gsis.delegators // $n_pools)
+          , pool_coin:             (if $n_pools == 0 then 0
+-                                   else $gsis.pools_balance / $n_pools | floor end)
++                                   else $gsis.per_pool_balance end)
+          , shelley:
+            ({ protocolParams:
+               { activeSlotsCoeff:           $gsis.active_slots_coeff
+@@ -127,8 +129,8 @@ def add_derived_params:
+          { minimum_chain_density: ($gsis.active_slots_coeff * 0.5)
+          , cluster_startup_overhead_s:
+                 (($gsis.utxo + $gsis.delegators) as $dataset_size
+-                | if $dataset_size < 10000 then 5
+-                  else $dataset_size / 25000
++                | if $dataset_size < 10000 then 15
++                  else $dataset_size / 10000
+                   end)
+          }
+      }
+@@ -139,8 +141,7 @@ def add_derived_params:
+      { genesis:
+        ## Depends on computed delegators:
+        { delegator_coin:   (if .common.genesis.delegators == 0 then 0
+-                            else $gsis.pools_balance / .common.genesis.delegators
+-                                 | floor
++                            else $gsis.per_pool_balance
+                             end)
+        }
+      }
+diff --git a/nix/workbench/profiles/genesis-utxo.skey b/nix/workbench/profiles/genesis-utxo.skey
+new file mode 100644
+index 000000000..23dbab3cb
+--- /dev/null
++++ b/nix/workbench/profiles/genesis-utxo.skey
+@@ -0,0 +1,5 @@
++{
++    "type": "GenesisUTxOSigningKey_ed25519",
++    "description": "Genesis Initial UTxO Signing Key",
++    "cborHex": "58201f0655ba7500f4e923cac3741e730a325b7f2df549f949a19f7f7995de021964"
++}
+diff --git a/nix/workbench/profiles/genesis-utxo.vkey b/nix/workbench/profiles/genesis-utxo.vkey
+new file mode 100644
+index 000000000..3135d3cef
+--- /dev/null
++++ b/nix/workbench/profiles/genesis-utxo.vkey
+@@ -0,0 +1,5 @@
++{
++    "type": "GenesisUTxOVerificationKey_ed25519",
++    "description": "Genesis Initial UTxO Verification Key",
++    "cborHex": "582055d24618feb099af69a9588cb6beb2e103f451a4f3869949576b7765aaef7c7a"
++}
+diff --git a/nix/workbench/profiles/node-services.nix b/nix/workbench/profiles/node-services.nix
+index 24053e958..8fc90f87f 100644
+--- a/nix/workbench/profiles/node-services.nix
++++ b/nix/workbench/profiles/node-services.nix
+@@ -102,6 +102,10 @@ let
+           minSeverity                 = "Debug";
+           TraceMempool                = true;
+           TraceTxInbound              = true;
++          TraceBlockFetchClient       = true;
++          TraceBlockFetchServer       = true;
++          TraceChainSyncHeaderServer  = true;
++          TraceChainSyncClient        = true;
+           options = {
+             mapBackends = {
+               "cardano.node.resources" = [ "KatipBK" ];
+@@ -171,7 +175,6 @@ let
+       extra = {
+         services.cardano-node = {
+           enable = true;
+-          cardanoNodePkgs = pkgs;
+         } // serviceConfig;
+       };
+     in evalModules {
+diff --git a/nix/workbench/profiles/profiles.jq b/nix/workbench/profiles/profiles.jq
+index e78bab617..09ebad16d 100644
+--- a/nix/workbench/profiles/profiles.jq
++++ b/nix/workbench/profiles/profiles.jq
+@@ -16,10 +16,10 @@
+ ##  - era-dependent defaults for the aforementioned sections:
+ ##    - profiles/defaults.jq
+ ##
+-##  - overlayed with generated profile variants + ad-hoc profiles:
++##  - overlaid with generated profile variants + ad-hoc profiles:
+ ##    - profiles/variants.jq and profiles/adhoc.jq
+ ##
+-##  - each then further overlayed with derived parameters, computed from the above:
++##  - each then further overlaid with derived parameters, computed from the above:
+ ##    - profiles/derived.jq
+ ##
+ ## Profiles variants are generated as a cartesian product of variations
+diff --git a/nix/workbench/profiles/topology.jq b/nix/workbench/profiles/topology.jq
+index 620262e9a..4bf6dd8c7 100644
+--- a/nix/workbench/profiles/topology.jq
++++ b/nix/workbench/profiles/topology.jq
+@@ -4,7 +4,7 @@
+ ##
+ ## Testable with:
+ ##
+-##   jq -n 'include "composition" { search: "nix/supervisord-cluster/profiles" }; topology_composition({ coreNodes: { bft1: { pools: 0 } } })'
++##   jq -n 'include "composition" { search: "nix/workbench/profiles" }; topology_composition({ coreNodes: { bft1: { pools: 0 } } })'
+ ##
+ def topology_composition($topo):
+     $topo
+diff --git a/nix/workbench/profiles/variants.jq b/nix/workbench/profiles/variants.jq
+index e86ac5e93..bbb0b071c 100644
+--- a/nix/workbench/profiles/variants.jq
++++ b/nix/workbench/profiles/variants.jq
+@@ -46,17 +46,16 @@ def genesis_profile_variants:
+       }
+     }
+   , { name: "smoke"
+-    , scenario: "fixed"
+-    , genesis: { utxo: 100, delegators: 9 }
++    , scenario: "fixed-loaded"
+     , node:
+-      { shutdown_on_slot_synced: 150
++      { shutdown_on_slot_synced: 60
+       }
++    , generator: { tps: 10 }
+     }
+-  , { name: "smoke-loaded"
+-    , scenario: "fixed-loaded"
+-    , genesis: { utxo: 100, delegators: 9 }
++  , { scenario: "fixed-loaded"
++    , genesis: { utxo: 1000000, delegators: 1000000 }
+     , node:
+-      { shutdown_on_slot_synced: 150
++      { shutdown_on_slot_synced: 600
+       }
+     , generator: { tps: 10 }
+     }
+diff --git a/nix/workbench/run.sh b/nix/workbench/run.sh
+index c64abf183..bf8d0b04c 100644
+--- a/nix/workbench/run.sh
++++ b/nix/workbench/run.sh
+@@ -48,8 +48,6 @@ do case "$1" in
+        --rundir ) global_rundir=$2; shift;;
+        * ) break;; esac; shift; done
+ 
+-global_envjson=$global_rundir/env.json
+-
+ local op=${1:-list}; test $# -gt 0 && shift
+ 
+ case "$op" in
+@@ -62,7 +60,10 @@ case "$op" in
+                  sort || true);;
+ 
+     compute-path )
+-        echo -n "$global_rundir/$1";;
++        if test -f "$1/meta.json"
++        then echo -n "$1"
++        else echo -n "$global_rundir/$1"
++        fi;;
+ 
+     fix-legacy-run-structure | fix-legacy )
+         local usage="USAGE: wb run $op TAG"
+@@ -87,22 +88,13 @@ case "$op" in
+                      mv "$logdir" "$dir"/$logs_less; done; fi
+         else msg "fixing up a cardano-ops run in:  $dir"; fi
+ 
+-        jq '.meta.profile_content' "$dir"/meta.json > "$dir"/profile.json
+-
+-        jq_fmutate "$dir"/env.json '. *
+-          { type:         "legacy"
+-          , staggerPorts: false
+-          }
+-        ';;
++        jq '.meta.profile_content' "$dir"/meta.json > "$dir"/profile.json;;
+ 
+     check )
+         local usage="USAGE: wb run $op TAG"
+         local tag=${1:?$usage}
+         local dir=$(run compute-path "$tag")
+ 
+-        test "$(tr -d / <<<$tag)" = "$tag" ||
+-            fatal "run tag has slashes:  $tag"
+-
+         jq_check_json "$dir"/meta.json ||
+             fatal "run $tag (at $dir) missing a file:  meta.json"
+ 
+@@ -235,57 +227,48 @@ case "$op" in
+     allocate )
+         local usage="USAGE: wb run $op BATCH-NAME PROFILE-NAME [ENV-CONFIG-OPTS..] [-- BACKEND-ARGS-AND-ENV-CONFIG-OPTS..]"
+         local batch=${1:?$usage}; shift
+-        local  prof=${1:?$usage}; shift
++        local profile_name=${1:?$usage}; shift
+ 
+-        local cacheDir=$default_cacheDir basePort=$default_basePort staggerPorts='false'
++        local profile= topology= genesis_cache_entry=
+         while test $# -gt 0
+         do case "$1" in
+-               --profile-out )   profileOut=$2; shift;;
+-               --cache-dir )     cacheDir=$2; shift;;
+-               --base-port )     basePort=$2; shift;;
+-               --stagger-ports ) staggerPorts=true;;
++               --profile )             profile=$2; shift;;
++               --topology )            topology=$2; shift;;
++               --genesis-cache-entry ) genesis_cache_entry=$2; shift;;
+                -- ) shift; break;;
+                --* ) msg "FATAL:  unknown flag '$1'"; usage_run;;
+                * ) break;; esac; shift; done
+ 
+         local timestamp=$(date +'%s' --utc)
+         local date=$(date +'%Y'-'%m'-'%d'-'%H.%M' --date=@$timestamp --utc)
+-        local tag=$date.$batch.$prof
++        local tag=$date.$batch.$profile_name
+         local dir=$global_rundir/$tag
+         local realdir=$(realpath --canonicalize-missing "$dir")
++        local cacheDir=$(envjqr 'cacheDir')
+ 
+-        if test "$(dirname "$realdir")" != "$(realpath "$global_rundir")"
+-        then fatal "bad tag/run dir:  $tag @ $dir"; fi
+-
+-        if test -e "$dir"
+-        then fatal "tag busy:  $tag @ $dir"; fi
+-
+-        if ! profile has-profile          "$prof"
+-        then fatal      "no such profile:  $prof"; fi
+-
++        test "$(dirname "$realdir")" = "$(realpath "$global_rundir")" ||
++            fatal "profile | allocate bad tag/run dir:  $tag @ $dir"
++        test ! -e "$dir" ||
++            fatal "profile | allocate tag busy:  $tag @ $dir"
+         mkdir -p "$cacheDir" && test -w "$cacheDir" ||
+-            fatal "failed to create writable cache directory:  $cacheDir"
+-
++            fatal "profile | allocate failed to create writable cache directory:  $cacheDir"
+         mkdir -p "$dir" && test -w "$dir" ||
+-            fatal "failed to create writable run directory:  $dir"
++            fatal "profile | allocate failed to create writable run directory:  $dir"
++
++        if test -n "$profile"
++        then
++            test "$(jq -r .name $profile/profile.json)" = "$profile_name" ||
++                fatal "profile | allocate incoherence:  --profile $profile/profile.json mismatches '$profile_name'"
++            ln -s "$profile"              "$dir"/profile
++            cp    "$profile"/profile.json "$dir"/profile.json
++        else
++            profile has-profile          "$profile_name" ||
++                fatal  "no such profile:  $profile_name"
++            profile json-by-name         "$profile_name" > "$dir"/profile.json
++        fi
++        msg "run | allocate | profile:  $(if test -n "$profile"; then echo pre-supplied; else echo computed; fi)"
+ 
+-        local args=(
+-            --null-input
+-            --arg     cacheDir    "$cacheDir"
+-            --argjson basePort     $basePort
+-            --argjson staggerPorts $staggerPorts
+-        )
+-        jq_fmutate "$global_envjson" '
+-          { cacheDir:     $cacheDir
+-          , basePort:     $basePort
+-          , staggerPorts: $staggerPorts
+-          }
+-        ' "${args[@]}"
+-        backend record-extended-env-config "$global_envjson" "$@"
+-        cp "$global_envjson" "$dir"/env.json
+-
+-        profile get "$prof" > "$dir"/profile.json
+-        profile node-specs    "$dir"/profile.json "$global_envjson" > "$dir"/node-specs.json
++        profile node-specs "$dir"/profile.json > "$dir"/node-specs.json
+ 
+         ## TODO:  AWS
+         local node_commit_desc=$(git_repo_commit_description '.')
+@@ -293,7 +276,7 @@ case "$op" in
+         local args=(
+             --arg       tag              "$tag"
+             --arg       batch            "$batch"
+-            --arg       profile          "$prof"
++            --arg       profile_name     "$profile_name"
+             --argjson   timestamp        "$timestamp"
+             --arg       date             "$date"
+             --arg       node_commit_desc "$node_commit_desc"
+@@ -303,7 +286,7 @@ case "$op" in
+            { meta:
+              { tag:              $tag
+              , batch:            $batch
+-             , profile:          $profile
++             , profile:          $profile_name
+              , timestamp:        $timestamp
+              , date:             $date
+              , node_commit_desc: $node_commit_desc
+@@ -312,25 +295,34 @@ case "$op" in
+            }
+            ' "${args[@]}"
+ 
+-        topology make    "$dir"/profile.json "$dir"/topology
+-
+-        local cacheDir=$(jq -r .cacheDir "$global_envjson")
+-        test "$cacheDir" != 'null' -a -d "$cacheDir" ||
+-            fatal "invalid global env JSON"
++        msg "run | allocate | topology:  $(if test -n "$topology"; then echo pre-supplied; else echo computed; fi)"
++        if test -n "$topology"
++        then ln -s "$topology"                    "$dir"/topology
++        else topology make    "$dir"/profile.json "$dir"/topology
++        fi
+ 
+-        local genesis_args=(
+-            ## Positionals:
+-            "$cacheDir"/genesis "$dir"/profile.json
+-            "$dir"/topology
+-            "$dir"/genesis
+-        )
+-        genesis prepare "${genesis_args[@]}"
++        msg "run | allocate | genesis:  $(if test -n "$genesis_cache_entry"; then echo pre-supplied; else echo computed; fi)"
++        if test   -n "$genesis_cache_entry"
++        then genesis derive-from-cache      \
++                     "$profile"             \
++                     "$genesis_cache_entry" \
++                     "$dir"/genesis
++        else
++             local genesis_args=(
++                 ## Positionals:
++                 "$cacheDir"/genesis
++                 "$dir"/profile.json
++                 "$dir"/topology
++                 "$dir"/genesis
++             )
++             genesis prepare "${genesis_args[@]}"
++        fi
+ 
+         ## Record geneses
+         cp "$dir"/genesis/genesis-shelley.json "$dir"/genesis-shelley.json
+         cp "$dir"/genesis/genesis.alonzo.json  "$dir"/genesis.alonzo.json
+ 
+-        local svcs=$profileOut/node-services.json
++        local svcs=$profile/node-services.json
+         for node in $(jq_tolist 'keys' "$dir"/node-specs.json)
+         do local node_dir="$dir"/$node
+            mkdir -p                                          "$node_dir"
+@@ -341,7 +333,7 @@ case "$op" in
+            cp $(jq '."'"$node"'"."topology"'       -r $svcs) "$node_dir"/topology.json
+         done
+ 
+-        local gtor=$profileOut/generator-service.json
++        local gtor=$profile/generator-service.json
+         gen_dir="$dir"/generator
+         mkdir -p                              "$gen_dir"
+         cp $(jq '."run-script"'     -r $gtor) "$gen_dir"/run-script.json
+@@ -424,7 +416,7 @@ workbench:  run $(with_color yellow $tag) params:
+   - profile JSON:    $dir/profile.json
+   - node specs:      $dir/node-specs.json
+   - topology:        $dir/topology/topology-nixops.json $dir/topology/topology.pdf
+-  - node base port:  $(jq .basePort "$global_envjson")
++  - node base port:  $(envjq 'basePort')
+ EOF
+         backend describe-run "$dir"
+         ;;
+@@ -434,9 +426,6 @@ EOF
+         local tag=${1:?$usage}
+         local dir=$(run get "$tag")
+ 
+-        local compat_args=(
+-            --rawfile genesis_cache_key "$dir/genesis/cache.key"
+-        )
+         jq_fmutate "$dir"/meta.json '
+            def compat_fixups:
+              { genesis:
+@@ -449,9 +438,8 @@ EOF
+              };
+            . * { meta:
+                  { profile_content:   (.meta.profile_content | compat_fixups)
+-                 , genesis_cache_id:  $genesis_cache_key
+                  }
+-               }' "${compat_args[@]}";;
++               }';;
+ 
+     start )
+         local usage="USAGE: wb run $op [--no-generator] [--scenario NAME] TAG"
+diff --git a/nix/workbench/shell.nix b/nix/workbench/shell.nix
+new file mode 100644
+index 000000000..05ae54509
+--- /dev/null
++++ b/nix/workbench/shell.nix
+@@ -0,0 +1,38 @@
++{ lib
++, workbenchDevMode ? false
++, useCabalRun ? false
++, checkoutWbMode ? "unknown"
++}:
++
++with lib;
++
++let
++  shellHook = ''
++    echo 'workbench shellHook:  workbenchDevMode=${toString workbenchDevMode} useCabalRun=${toString useCabalRun}'
++    export WORKBENCH_BACKEND=supervisor
++
++    ${optionalString
++      workbenchDevMode
++    ''
++    export WORKBENCH_CARDANO_NODE_REPO_ROOT=$(git rev-parse --show-toplevel)
++    export WORKBENCH_EXTRA_FLAGS=
++
++    function wb() {
++      $WORKBENCH_CARDANO_NODE_REPO_ROOT/nix/workbench/wb --set-mode ${checkoutWbMode} $WORKBENCH_EXTRA_FLAGS "$@"
++    }
++    export -f wb
++    ''}
++
++    ${optionalString
++      useCabalRun
++      ''
++      . nix/workbench/lib.sh
++      . nix/workbench/lib-cabal.sh
++      ''}
++
++    export CARDANO_NODE_SOCKET_PATH=run/current/node-0/node.socket
++    '';
++in
++{
++  inherit shellHook;
++}
+diff --git a/nix/workbench/snapshot.nix b/nix/workbench/snapshot.nix
+new file mode 100644
+index 000000000..d3c43ad0f
+--- /dev/null
++++ b/nix/workbench/snapshot.nix
+@@ -0,0 +1,75 @@
++{ lib, runCommand, jq
++, db-analyser
++, chain, shelleyGenesisHash
++, input, node-snapshot
++, snapshotSlot, finalChunkNo
++}:
++
++let
++  secondLastChunkNo = finalChunkNo - 1; # todo, second last chunk, not epoch
++  chain' = chain.override { upToChunk = finalChunkNo; };
++  partialChain = runCommand "partial-chain-${toString finalChunkNo}" {} ''
++    mkdir -p $out/immutable
++    cd $out
++    ln -s ${chain'}/protocolMagicId protocolMagicId
++    for epoch in {00000..${toString secondLastChunkNo}}; do
++      ln -s ${chain'}/immutable/''${epoch}.{chunk,primary,secondary} immutable
++    done
++    cp ${chain'}/immutable/0${toString finalChunkNo}.{chunk,primary,secondary} immutable
++
++    ## Existence of 'clean' is necessary to avoid ImmutableDB revalidation:
++    touch clean
++  '';
++  filter = name: type: let
++    baseName = baseNameOf (toString name);
++    sansPrefix = lib.removePrefix (toString node-snapshot) name;
++  in
++  builtins.trace sansPrefix (
++    sansPrefix == "/configuration" ||
++    (lib.hasPrefix "/configuration/cardano" sansPrefix));
++in runCommand "snapshot-generation" {
++  buildInputs = [ jq db-analyser ];
++  inherit finalChunkNo snapshotSlot;
++  requiredSystemFeatures = [ "benchmark" ];
++  meta.timeout = 16 * 3600; # 16 hours
++  genesisFiles = lib.cleanSourceWith { inherit filter; src = builtins.unsafeDiscardStringContext node-snapshot; name = "genesis-files"; };
++} ''
++  cp -r ${partialChain} chain
++  chmod +w -R chain
++
++  cp $genesisFiles/configuration/cardano/*-genesis.json .
++
++  ## Normally db-analyser is silent, and so that would make Hydra builds time out.
++  ## This prevents the timeout.
++  { while true; do sleep 3600; echo not silent; done } &
++
++  ## Actually produce the snapshot:
++  args=( --configByron     mainnet-byron-genesis.json
++         --configShelley   mainnet-shelley-genesis.json
++         --nonce           ${shelleyGenesisHash}
++         --configAlonzo    mainnet-alonzo-genesis.json
++         --store-ledger    ${toString snapshotSlot}
++       )
++  db-analyser --db chain/ cardano "''${args[@]}"
++
++  ls -ltrh chain/ledger
++
++  mv chain/ledger/${toString snapshotSlot}_db-analyser temp
++  rm chain/ledger/*
++  mv temp chain/ledger/${toString snapshotSlot}
++
++  mkdir $out
++  mv chain $out/
++
++  args=( --argjson snapshotSlot                 ${toString snapshotSlot}
++         --arg     snapshottingConsensusNodeRev ${input.node-snapshot.rev}
++         --arg     shelleyGenesisHash           ${shelleyGenesisHash}
++         --arg     finalChunkNo                 ${toString finalChunkNo}
++       )
++  jq '{ snapshotSlot:                 $snapshotSlot
++      , finalChunkNo:                 $finalChunkNo
++      , snapshottingConsensusNodeRev: $snapshottingConsensusNodeRev
++      , shelleyGenesisHash:           $shelleyGenesisHash
++      }
++     ' "''${args[@]}" > $out/snapshot-info.json
++''
+diff --git a/nix/workbench/supervisor-conf.nix b/nix/workbench/supervisor-conf.nix
+new file mode 100644
+index 000000000..f6e1479e9
+--- /dev/null
++++ b/nix/workbench/supervisor-conf.nix
+@@ -0,0 +1,68 @@
++{ pkgs
++, lib
++, stateDir
++, basePort
++, node-services
++, generator-service
++  ## Last-moment overrides:
++, extraSupervisorConfig
++}:
++
++with lib;
++
++let
++  ##
++  ## supervisorConf :: SupervisorConf
++  ##
++  ## Refer to: http://supervisord.org/configuration.html
++  ##
++  supervisorConf =
++    {
++      supervisord = {
++        logfile = "${stateDir}/supervisor/supervisord.log";
++        pidfile = "${stateDir}/supervisor/supervisord.pid";
++        strip_ansi = true;
++      };
++      supervisorctl = {};
++      inet_http_server = {
++        port = "127.0.0.1:9001";
++      };
++      "rpcinterface:supervisor" = {
++        "supervisor.rpcinterface_factory" = "supervisor.rpcinterface:make_main_rpcinterface";
++      };
++    }
++    //
++    listToAttrs
++      (mapAttrsToList (_: nodeSvcSupervisorProgram) node-services)
++    //
++    {
++      "program:generator" = {
++        directory      = "${stateDir}/generator";
++        command        = "sh start.sh";
++        stdout_logfile = "${stateDir}/generator/stdout";
++        stderr_logfile = "${stateDir}/generator/stderr";
++        autostart      = false;
++        startretries   = 0;
++      };
++    }
++    //
++    extraSupervisorConfig;
++
++  ##
++  ## nodeSvcSupervisorProgram :: NodeService -> SupervisorConfSection
++  ##
++  ## Refer to: http://supervisord.org/configuration.html#program-x-section-settings
++  ##
++  nodeSvcSupervisorProgram = { nodeSpec, service, ... }:
++    nameValuePair "program:${nodeSpec.value.name}" {
++      directory      = "${service.value.stateDir}";
++      command        = "sh start.sh";
++      stdout_logfile = "${service.value.stateDir}/stdout";
++      stderr_logfile = "${service.value.stateDir}/stderr";
++      startretries   = 0;
++      autorestart    = false;
++    };
++
++in
++  pkgs.writeText "supervisor.conf"
++    (generators.toINI {} supervisorConf)
+diff --git a/nix/workbench/supervisor-run.nix b/nix/workbench/supervisor-run.nix
+new file mode 100644
+index 000000000..76c151149
+--- /dev/null
++++ b/nix/workbench/supervisor-run.nix
+@@ -0,0 +1,152 @@
++let
++  batchNameDefault   = "plain";
++  profileNameDefault = "default-alzo";
++in
++
++{ pkgs
++, cardanoNodePackages
++, supervisord-workbench
++##
++, profileName           ? profileNameDefault
++, batchName             ? batchNameDefault
++##
++, workbenchDevMode      ? false
++}:
++
++let
++  inherit (supervisord-workbench) workbench backend cacheDir stateDir basePort;
++
++  with-supervisord-profile =
++    { envArgsOverride ? {} }:
++    workbench.with-profile
++      { inherit backend profileName;
++        envArgs = supervisord-workbench.env-args-base // envArgsOverride;
++      };
++
++  inherit
++    (with-supervisord-profile {})
++    profileNix profile topology genesis;
++in
++
++let
++
++  inherit (profile.value) era composition monetary;
++
++  path = pkgs.lib.makeBinPath path';
++  path' =
++    [ cardanoNodePackages.bech32 pkgs.jq pkgs.gnused pkgs.coreutils pkgs.bash pkgs.moreutils
++    ]
++    ## In dev mode, call the script directly:
++    ++ pkgs.lib.optionals (!workbenchDevMode)
++    [ workbench.workbench ];
++
++  interactive-start = pkgs.writeScriptBin "start-cluster" ''
++    set -euo pipefail
++
++    export PATH=$PATH:${path}
++
++    wb start \
++        --batch-name   ${batchName} \
++        --profile-name ${profileName} \
++        --profile      ${profile} \
++        --cache-dir    ${cacheDir} \
++        --base-port    ${toString basePort} \
++        ''${WORKBENCH_CABAL_MODE:+--cabal} \
++        "$@" &&
++        echo 'workbench:  cluster started. Run `stop-cluster` to stop' >&2
++  '';
++
++  interactive-stop = pkgs.writeScriptBin "stop-cluster" ''
++    set -euo pipefail
++
++    wb finish "$@"
++  '';
++
++  interactive-restart = pkgs.writeScriptBin "restart-cluster" ''
++    set -euo pipefail
++
++    wb run restart "$@" && \
++        echo "workbench:  alternate command for this action:  wb run restart" >&2
++  '';
++
++  nodeBuildProducts =
++    name:
++    "report ${name}.log $out ${name}/stdout";
++
++  profile-run =
++    { trace ? false }:
++    let
++      inherit
++        (with-supervisord-profile
++          { envArgsOverride = { cacheDir = "./cache"; stateDir = "./"; }; })
++        profileNix profile topology genesis;
++
++      run = pkgs.runCommand "workbench-run-supervisord-${profileName}"
++        { requiredSystemFeatures = [ "benchmark" ];
++          nativeBuildInputs = with cardanoNodePackages; with pkgs; [
++            bash
++            bech32
++            coreutils
++            gnused
++            jq
++            moreutils
++            nixWrapped
++            pstree
++            python3Packages.supervisor
++            workbench.workbench
++          ];
++        }
++          ''
++          mkdir -p $out/{cache,nix-support}
++          cd       $out
++
++          export WORKBENCH_BACKEND=supervisor
++          export CARDANO_NODE_SOCKET_PATH=$(wb backend get-node-socket-path ${stateDir})
++
++          cmd=(
++              wb
++              ${pkgs.lib.optionalString trace "--trace"}
++              start
++              --profile-name        ${profileName}
++              --profile             ${profile}
++              --topology            ${topology}
++              --genesis-cache-entry ${genesis}
++              --batch-name          smoke-test
++              --base-port           ${toString basePort}
++              --cache-dir           ./cache
++          )
++          echo "''${cmd[*]}" > $out/wb-start.sh
++
++          time "''${cmd[@]}" 2>&1 |
++              tee $out/wb-start.log
++
++          ## Convert structure from $out/run/RUN-ID/* to $out/*:
++          rm -rf cache
++          rm -f run/{current,-current}
++          tag=$(cd run; ls)
++          mv       run/$tag/*   .
++          rmdir    run/$tag run
++          rm -f    node-*/node.socket
++
++          cat > $out/nix-support/hydra-build-products <<EOF
++          report workbench.log $out wb-start.log
++          report meta.json     $out meta.json
++          ${pkgs.lib.concatStringsSep "\n"
++            (map nodeBuildProducts (__attrNames profileNix.node-specs.value))}
++          report node-0        $out meta.json
++          EOF
++
++          echo "workbench-test:  completed run $tag"
++          '';
++    in
++      run // {
++        analysis = workbench.run-analysis { inherit pkgs workbench profileNix run; };
++      };
++in
++{
++  inherit stateDir;
++  inherit workbench supervisord-workbench;
++  inherit profileNix profile topology genesis;
++  inherit interactive-start interactive-stop interactive-restart;
++  inherit profile-run;
++}
+diff --git a/nix/workbench/supervisor.nix b/nix/workbench/supervisor.nix
+new file mode 100644
+index 000000000..c02c25e77
+--- /dev/null
++++ b/nix/workbench/supervisor.nix
+@@ -0,0 +1,134 @@
++let
++  basePort              = 30000;
++  cacheDirDefault       = "${__getEnv "HOME"}/.cache/cardano-workbench";
++  stateDir              = "run/current";
++in
++{ pkgs
++, lib
++, workbench
++##
++, cacheDir              ? cacheDirDefault
++, extraSupervisorConfig ? {}
++, useCabalRun           ? false
++, enableEKG             ? true
++##
++, ...
++}:
++with lib;
++let
++  backend =
++    rec
++    { name = "supervisor";
++      ## Generic Nix bits:
++      topologyForNodeSpec =
++        { profile, nodeSpec }:
++        let inherit (nodeSpec) name i; in
++        workbench.runWorkbench
++          "topology-${name}.json"
++          "topology projection-for local-${nodeSpec.kind} ${toString i} ${profile.name} ${profile.topology.files} ${toString basePort}";
++
++      nodePublicIP =
++        { i, name, ... }@nodeSpec:
++        "127.0.0.1";
++
++      finaliseNodeService =
++        { name, i, isProducer, ... }: svc: recursiveUpdate svc
++          ({
++            stateDir       = stateDir + "/${name}";
++            ## Everything is local in the supervisord setup:
++            socketPath     = "node.socket";
++            topology       = "topology.json";
++            nodeConfigFile = "config.json";
++          } // optionalAttrs useCabalRun {
++            executable     = "cabal run exe:cardano-node --";
++          } // optionalAttrs isProducer {
++            operationalCertificate = "../genesis/node-keys/node${toString i}.opcert";
++            kesKey         = "../genesis/node-keys/node-kes${toString i}.skey";
++            vrfKey         = "../genesis/node-keys/node-vrf${toString i}.skey";
++          });
++
++      finaliseNodeConfig =
++        { port, ... }: cfg: recursiveUpdate cfg
++          ({
++            AlonzoGenesisFile    = "../genesis.alonzo.json";
++            ShelleyGenesisFile   = "../genesis-shelley.json";
++            ByronGenesisFile     = "../genesis/byron/genesis.json";
++          } // optionalAttrs enableEKG {
++            hasEKG               = port + supervisord.portShiftEkg;
++            hasPrometheus        = [ "127.0.0.1" (port + supervisord.portShiftPrometheus) ];
++            setupBackends = [
++              "EKGViewBK"
++            ];
++          });
++
++      finaliseNodeArgs =
++        { port, ... }: cfg: cfg;
++
++      finaliseGeneratorService =
++        svc: recursiveUpdate svc
++          ({
++            sigKey         = "../genesis/utxo-keys/utxo1.skey";
++            nodeConfigFile = "config.json";
++            runScriptFile  = "run-script.json";
++          } // optionalAttrs useCabalRun {
++            executable     = "cabal run exe:tx-generator --";
++          });
++
++      finaliseGeneratorConfig =
++        cfg: recursiveUpdate cfg
++          ({
++            AlonzoGenesisFile    = "../genesis.alonzo.json";
++            ShelleyGenesisFile   = "../genesis-shelley.json";
++            ByronGenesisFile     = "../genesis/byron/genesis.json";
++          });
++
++      materialise-profile =
++        { profileNix }:
++        pkgs.runCommand "workbench-profile-outputs-${profileNix.name}-supervisord" {}
++          ''
++          mkdir $out
++          cp ${supervisord.mkSupervisorConf profileNix} $out/supervisor.conf
++          '';
++
++      ## IMPORTANT:  keep in sync with envArgs in 'workbench/default.nix/generateProfiles/environment'.
++      env-args-base =
++        {
++          inherit (pkgs) cardanoLib;
++          inherit stateDir cacheDir basePort;
++          staggerPorts = true;
++        };
++
++      ## Backend-specific Nix bits:
++      supervisord =
++        {
++          inherit
++            extraSupervisorConfig;
++
++          portShiftEkg        = 100;
++          portShiftPrometheus = 200;
++
++          ## mkSupervisorConf :: Profile -> SupervisorConf
++          mkSupervisorConf =
++            profile:
++            pkgs.callPackage ./supervisor-conf.nix
++            { inherit (profile) node-services generator-service;
++              inherit
++                pkgs lib stateDir
++                basePort
++                extraSupervisorConfig;
++            };
++        };
++    };
++
++  all-profiles =
++    workbench.all-profiles
++      { inherit backend;
++        envArgs = backend.env-args-base;
++      };
++in
++{
++  inherit cacheDir stateDir basePort;
++  inherit workbench;
++  inherit backend;
++  inherit all-profiles;
++}
+diff --git a/nix/workbench/supervisor.sh b/nix/workbench/supervisor.sh
+index db2f9b0a5..22d03a4ed 100755
+--- a/nix/workbench/supervisor.sh
++++ b/nix/workbench/supervisor.sh
+@@ -6,13 +6,6 @@ usage_supervisor() {
+                      Given a state dir, print the default node socket path
+                        for 'cardano-cli'
+ 
+-    record-extended-env-config ENV-JSON [ENV-CONFIG-OPTS..]
+-                     Extend the env JSON with the backend-specific
+-                       environment config options:
+-                         --port-shift-ekg INT
+-                         --port-shift-prometheus INT
+-                         --supervisor-conf FILE
+-
+     describe-run RUN-DIR
+     allocate-run RUN-DIR
+     start-cluster RUN-DIR
+@@ -44,46 +37,13 @@ case "$op" in
+         echo -n $state_dir/node-0/node.socket
+         ;;
+ 
+-    record-extended-env-config )
+-        local usage="USAGE: wb supervisor $op ENV-JSON [ENV-CONFIG-OPTS..]"
+-        local env_json=${1:?$usage}; shift
+-
+-        local port_shift_ekg=200
+-        local port_shift_prometheus=300
+-        local supervisor_conf=
+-        while test $# -gt 0
+-        do case "$1" in
+-               --port-shift-ekg )        port_shift_ekg=$2; shift;;
+-               --port-shift-prometheus ) port_shift_prometheus=$2; shift;;
+-               --supervisor-conf )       supervisor_conf=$2; shift;;
+-               --* ) msg "FATAL:  unknown flag '$1'"; usage_supervisor;;
+-               * ) break;; esac; shift; done
+-
+-        test -r "$supervisor_conf" ||
+-            fatal "supervisor record-extended-env-config requires the --supervisor-conf FILE option to point to a readable file, but it was:  $supervisor_conf"
+-
+-        local env_json="$env_json"
+-        local args=(
+-            --argjson port_shift_ekg        "$port_shift_ekg"
+-            --argjson port_shift_prometheus "$port_shift_prometheus"
+-            --arg     supervisor_conf       "$supervisor_conf"
+-        )
+-        jq_fmutate "$env_json" '. *
+-          { type:                  "supervisor"
+-          , port_shift_ekg:        $port_shift_ekg
+-          , port_shift_prometheus: $port_shift_prometheus
+-          , supervisor_conf:       $supervisor_conf
+-          }
+-        ' "${args[@]}"
+-        ;;
+-
+     describe-run )
+         local usage="USAGE: wb supervisor $op RUN-DIR"
+         local dir=${1:?$usage}
+ 
+-        local basePort=$(jq .basePort "$dir"/env.json)
+-        local port_ekg=$((       basePort+$(jq .port_shift_ekg        "$dir"/env.json)))
+-        local port_prometheus=$((basePort+$(jq .port_shift_prometheus "$dir"/env.json)))
++        local basePort=$(                   envjq 'basePort')
++        local port_ekg=$((       basePort+$(envjq 'port_shift_ekg')))
++        local port_prometheus=$((basePort+$(envjq 'port_shift_prometheus')))
+ 
+         cat <<EOF
+   - EKG URL (node-0):        http://localhost:$port_ekg/
+@@ -100,7 +60,7 @@ EOF
+                --* ) msg "FATAL:  unknown flag '$1'"; usage_supervisor;;
+                * ) break;; esac; shift; done
+ 
+-        local supervisor_conf=$(jq -r .supervisor_conf "$dir"/env.json)
++        local supervisor_conf=$(envjqr 'supervisor_conf')
+ 
+         mkdir -p               "$dir"/supervisor
+         cp -f $supervisor_conf "$dir"/supervisor/supervisord.conf
+@@ -125,7 +85,7 @@ EOF
+            then echo
+                 msg "FATAL:  workbench:  supervisor:  patience ran out after ${patience}s"
+                 backend_supervisor stop-cluster "$dir"
+-                fatal "node startup did not succeed:  check logs in $dir/node-0"
++                fatal "node startup did not succeed:  check logs in $dir/node-0/stdout"
+            fi
+            echo -ne "\b\b\b"
+         done >&2
+@@ -182,19 +142,22 @@ EOF
+         local dir=${1:?$usage}; shift
+ 
+         local svpid=$dir/supervisor/supervisord.pid pstree=$dir/supervisor/ps.tree
+-        pstree -Ap "$(cat "$svpid")" > "$pstree"
++        pstree -p "$(cat "$svpid")" > "$pstree"
+ 
+         local pidsfile="$dir"/supervisor/cardano-node.pids
+-        { grep -e '-[{]\?cardano-node[}]\?([0-9]*)-' "$pstree" || fail 'save-pids: pattern not found';
+-        } | sed -e 's/^.*[+`|]-[{]\?cardano-node[}]\?(\([0-9]*\))-.*$/\1/' \
+-                > "$pidsfile"
++        { grep '\\---\|--=' "$pstree" || true; } |
++            sed 's/^.*\\--- \([0-9]*\) .*/\1/; s/^[ ]*[^ ]* \([0-9]+\) .*/\1/
++                ' > "$pidsfile"
+ 
+         local mapn2p="$dir"/supervisor/node2pid.map; echo '{}' > "$mapn2p"
+         local mapp2n="$dir"/supervisor/pid2node.map; echo '{}' > "$mapp2n"
+         for node in $(jq_tolist keys "$dir"/node-specs.json)
+         do local service_pid=$(supervisorctl pid $node)
+-           local pid=$(fgrep -e "($service_pid)-" "$pstree" |
+-                       sed -e 's/^.*-cardano-node(\([0-9]*\))-.*$/\1/')
++           if test -z "$(ps h --ppid $service_pid)"
++           then local pid=$service_pid
++           else local pid=$(fgrep -e "= $(printf %05d $service_pid) " -A1 "$pstree" |
++                                tail -n1 | sed 's/^.*\\--- \([0-9]*\) .*/\1/; s/^[ ]*[^ ]* \([0-9]*\) .*/\1/')
++           fi
+            jq_fmutate "$mapn2p" '. * { "'$node'": '$pid' }'
+            jq_fmutate "$mapp2n" '. * { "'$pid'": "'$node'" }'
+         done
+diff --git a/nix/workbench/tests/base.py b/nix/workbench/tests/base.py
+new file mode 100644
+index 000000000..57942dbb5
+--- /dev/null
++++ b/nix/workbench/tests/base.py
+@@ -0,0 +1,14 @@
++"""Usage: cluster-test.py [--network-magic=INT] [--state-dir=DIR] [--num-delegs=INT]
++
++Options:
++    -n, --network-magic <magic>  network magic [default: 42]
++    -d, --num-delegs <int>  number of delegators [default: 1]
++    -s, --state-dir <dir>  state directory [default: "./state-cluster-test"]
++"""
++
++from docopt import docopt
++from cardanolib import CardanoCluster,CardanoCLIWrapper
++
++arguments = docopt(__doc__)
++cluster = CardanoCluster(int(arguments['--network-magic']), arguments["--state-dir"], int(arguments['--num-delegs']), "shelley")
++cluster.cli.refresh_pparams()
+diff --git a/nix/workbench/tests/default.nix b/nix/workbench/tests/default.nix
+new file mode 100644
+index 000000000..736fe2ee4
+--- /dev/null
++++ b/nix/workbench/tests/default.nix
+@@ -0,0 +1,36 @@
++{ pkgs
++}: let
++  inherit (pkgs) supervisord-workbench-for-profile cardano-cli cardanolib-py cardano-node;
++  stateDir = "./state-cluster-test";
++  # We want a really short duration for tests
++  cluster' = supervisord-workbench-for-profile {
++    genesisParams = {
++      slotLength = 0.1;
++      decentralisationParam = 0.8;
++    };
++    inherit stateDir;
++  };
++  # Library bash functions for cluster tests
++  pythonDeps = with pkgs.python3Packages; [ pkgs.python3 requests pyyaml docopt cardanolib-py ];
++  clusterDeps = [ cluster'.start cluster'.stop pkgs.jq cardano-cli cardano-node ];
++  # If any command in start-cluster, stop-cluster or cluster-commands exits
++  # with a status other than 0, the cluster will fail the test
++  mkClusterTest = name: testScript: pkgs.runCommand name { buildInputs = clusterDeps ++ pythonDeps; } ''
++    export CARDANO_NODE_SOCKET_PATH=${stateDir}/bft0.socket
++    start-cluster
++    export NETWORK_MAGIC=$(jq .networkMagic < ${stateDir}/shelley/genesis.json)
++    cp ${testScript} script.py
++    chmod -R u+w ${stateDir}
++    cp ${../genesis-utxo.vkey} ${stateDir}/shelley/genesis-utxo.vkey
++    cp ${../genesis-utxo.skey} ${stateDir}/shelley/genesis-utxo.skey
++    cp ${./base.py} base.py
++    python3 ./script.py --network-magic "$NETWORK_MAGIC" --state-dir "${stateDir}" --num-delegs 1
++    stop-cluster
++    touch $out
++  '';
++
++in {
++  # Base Test: Start cluster, register 2 pools, transfer funds, stop cluster
++  base = mkClusterTest "base" ./base.py;
++  updateProposal = mkClusterTest "update-proposal" ./update-proposal.py;
++}
+diff --git a/nix/workbench/tests/update-proposal.py b/nix/workbench/tests/update-proposal.py
+new file mode 100644
+index 000000000..fae320e9e
+--- /dev/null
++++ b/nix/workbench/tests/update-proposal.py
+@@ -0,0 +1,17 @@
++import sys
++import time
++
++from base import cluster
++
++cluster.submit_update_proposal([("decentralization-parameter", "0.5")])
++print(f"Update Proposal submitted. Sleeping until next epoch")
++cluster.sleep_until_next_epoch()
++cluster.cli.refresh_pparams()
++d = cluster.cli.pparams["decentralisationParam"]
++if d == 0.5:
++    print("Cluster update proposal successful!")
++    sys.exit(0)
++else:
++    print(f"Cluster update proposal failed! Expected 0, got {d}")
++    print(cluster.get_tip())
++    sys.exit(1)
+diff --git a/nix/workbench/topology.nix b/nix/workbench/topology.nix
+new file mode 100644
+index 000000000..0d9b5b629
+--- /dev/null
++++ b/nix/workbench/topology.nix
+@@ -0,0 +1,19 @@
++{ pkgs }:
++
++{ profileNix, profile }:
++pkgs.runCommand "workbench-topology-${profileNix.name}"
++  { requiredSystemFeatures = [ "benchmark" ];
++    nativeBuildInputs = with pkgs.haskellPackages; with pkgs;
++      [ bash cardano-cli coreutils gnused jq moreutils workbench.workbench ];
++  }
++  ''
++  mkdir $out
++  args=(
++     topology make
++     ${profileNix.JSON}
++     $out
++  )
++  time wb ''${args[@]}
++
++  ln -s ${profile} $out/profile
++  ''
+diff --git a/nix/workbench/topology.sh b/nix/workbench/topology.sh
+index a3c2b48f8..33fd7049f 100644
+--- a/nix/workbench/topology.sh
++++ b/nix/workbench/topology.sh
+@@ -54,8 +54,9 @@ case "${op}" in
+         mkdir -p                 "$outdir"
+         args=( --topology-output "$outdir"/topology-nixops.json
+                --dot-output      "$outdir"/topology.dot
++               $(jq '.composition.topology
++                    ' --raw-output "$profile_json")
+                --size             $n_hosts
+-
+                $(jq '.composition.locations
+                     | map("--loc " + .)
+                     | join(" ")
+@@ -117,7 +118,7 @@ case "${op}" in
+         local topo_dir=${4:?$usage}
+         local basePort=${5:?$usage}
+ 
+-        local prof=$(profile get $profile)
++        local prof=$(profile json-by-name $profile)
+ 
+         case "$role" in
+         local-bft | local-pool )
+diff --git a/nix/workbench/wb b/nix/workbench/wb
+index eedfaf323..2a044ca2a 100755
+--- a/nix/workbench/wb
++++ b/nix/workbench/wb
+@@ -3,6 +3,8 @@
+ 
+ set -euo pipefail
+ 
++export LANG=C.UTF-8
++
+ global_basedir=${global_basedir:-$(realpath "$(dirname "$0")")}
+ global_mode='unknown'
+ 
+@@ -82,61 +84,58 @@ EOF
+ 
+ start()
+ {
+-    local batch_name= profile_name=
++    local batch_name=
++    local profile_name= profile=
+     local backend=supervisor
+     local cabal_mode=
+-    local profile_out=
+-    local run_start_flags=()
+-    local base_port=30000
+-    local cache_dir=$HOME/.cache/cardano-workbench
++    local genesis_cache_entry_dir=
++    local topology_dir=
+     local verbose=
+ 
++    local run_args=()
++    local run_allocate_args=()
++    local run_start_args=()
+     while test $# -gt 0
+     do case "$1" in
+-        --batch-name )                   batch_name=$2; shift;;
+-        --cabal-mode | --cabal )         cabal_mode=t;;
+-
++        --batch-name )                   batch_name=$2;   shift;;
+         --profile-name )                 profile_name=$2; shift;;
+-        --profile-out )                  profile_out=$2; shift;;
++        --cache-dir )                    setenvjqstr 'cacheDir' $2; shift;;
++        --base-port )                    setenvjq    'basePort' $2; shift;;
+ 
+-        --no-generator | --no-gen )      run_start_flags+=($1);;
++        --profile )                      run_allocate_args+=($1 $2); profile=$2; shift;;
++        --genesis-cache-entry )          run_allocate_args+=($1 $2); shift;;
++        --topology )                     run_allocate_args+=($1 $2); shift;;
+ 
++        --no-generator | --no-gen )      run_start_args+=($1);;
++
++        --cabal-mode | --cabal )         cabal_mode=t;;
+         --supervisor | --backend-supervisor )
+                                          backend=supervisor;;
+ 
+-        --base-port )                    base_port=$2; shift;;
+-        --cache-dir )                    cache_dir=$2; shift;;
+-
+         --verbose )                      export verbose=t;;
+-        --trace | --debug )              set -x;;
+-        --trace-wb | --trace-workbench ) export WORKBENCH_EXTRA_FLAGS=--trace;;
++        --trace | --debug )              run_args+=($1); set -x;;
++        --trace-wb | --trace-workbench ) run_args+=($1); export WORKBENCH_EXTRA_FLAGS=--trace;;
+         --help )                         usage_start
+                                          exit 1;;
+-        * ) break;; esac; shift; done
++        * ) fatal "while parsing remaining 'wb start' args:  $*";;
++       esac; shift; done
+ 
+     if test -n "$cabal_mode"
+     then . $(dirname "$0")/lib-cabal.sh
+     fi
+ 
+-    wb backend assert-is $backend
+-    wb backend assert-stopped
+-
+-    wb_run_allocate_args=(
+-        --profile-out          "$profile_out"
+-        --cache-dir            "$cache_dir"
+-        --base-port             $base_port
+-        --stagger-ports
+-        --
+-        --port-shift-ekg        100
+-        --port-shift-prometheus 200
+-        --supervisor-conf      "$profile_out"/supervisor.conf
+-      )
+-    wb run allocate $batch_name $profile_name ${wb_run_allocate_args[@]}
++    backend assert-is $backend
++    backend assert-stopped
++
++    setenvjq    'port_shift_ekg'        100
++    setenvjq    'port_shift_prometheus' 200
++    setenvjqstr 'supervisor_conf'      "$profile"/supervisor.conf
++    run ${run_args[@]} allocate $batch_name $profile_name ${run_allocate_args[@]}
+ 
+     current_run_path=$(run current-path)
+     mkdir -p "$current_run_path"
+ 
+-    wb run start "$@" $(run current-tag)
++    run ${run_args[@]} start ${run_start_args[@]} $(run current-tag)
+ }
+ 
+ finish()
