@@ -22,6 +22,7 @@ scenario() {
 local op=${1:---help}; shift
 local usage="USAGE: wb scenario SCENARIO-OP OP-ARGS.."
 local dir=${1:?$usage}; shift
+local p=$dir/profile.json
 
 msg "starting scenario:  $(with_color blue $op)"
 case "$op" in
@@ -31,7 +32,11 @@ case "$op" in
 
     fixed )
         backend start-cluster      "$dir"
+
+        scenario_setup_termination "$dir"
         backend wait-pools-stopped "$dir"
+        scenario_cleanup_termination
+
         backend stop-cluster       "$dir"
         ;;
 
@@ -43,7 +48,11 @@ case "$op" in
     fixed-loaded )
         backend start-cluster      "$dir"
         backend start-generator    "$dir"
+
+        scenario_setup_termination "$dir"
         backend wait-pools-stopped "$dir"
+        scenario_cleanup_termination
+
         backend stop-cluster       "$dir"
         ;;
 
@@ -56,4 +65,33 @@ case "$op" in
         ;;
 
     * ) usage_scenario;; esac
+}
+
+__scenario_exit_trap_dir=
+scenario_exit_trap() {
+    echo >&2
+    msg "scenario:  exit trap triggered"
+    backend stop-cluster "$__scenario_exit_trap_dir"
+}
+
+__scenario_watcher_pid=
+scenario_watcher() {
+    while test $__scenario_watcher_end_time -gt $(date +%s)
+    do sleep 3; done
+    msg "scenario:  end of time reached"
+    kill $__scenario_watcher_self
+}
+
+scenario_setup_termination() {
+    __scenario_exit_trap_dir=$1
+    trap scenario_exit_trap EXIT
+
+    export __scenario_watcher_self=$BASHPID
+    export __scenario_watcher_end_time=$(jq '.meta.timing.earliest_end + 120' $1/meta.json)
+    scenario_watcher &
+    __scenario_watcher_pid=$!
+}
+
+scenario_cleanup_termination() {
+    kill $__scenario_watcher_pid
 }

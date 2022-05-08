@@ -240,28 +240,52 @@ case "$op" in
                --* ) msg "FATAL:  unknown flag '$1'"; usage_run;;
                * ) break;; esac; shift; done
 
+        ## 0. report software manifest
         manifest report "$manifest"
         local hash=$(jq '."cardano-node" | .[:5]' -r <<<$manifest)
 
-        local timestamp=$(date +'%s' --utc)
-        local date=$(date +'%Y'-'%m'-'%d'-'%H.%M' --date=@$timestamp --utc)
+        ## 1. compute cluster composition
+        local node_specs=$(profile node-specs "$profile"/profile.json)
 
-        ## Key decision point:
-        local tag=$date$(if test "$batch" != 'plain'; then echo -n .$batch; fi).$hash.$profile_name
+        ## 2. genesis cache entry population
+        msg "run | allocate | genesis cache:  $(if test -n "$genesis_cache_entry"; then echo pre-supplied; else echo preparing..; fi)"
+        if test  -z "$genesis_cache_entry"
+        then local genesis_tmpdir=$(mktemp --directory)
+             local cacheDir=$(envjqr 'cacheDir')
+             mkdir -p "$cacheDir" && test -w "$cacheDir" ||
+                     fatal "profile | allocate failed to create writable cache directory:  $cacheDir"
+             local genesis_args=(
+                 ## Positionals:
+                 "$profile"/profile.json
+                 "$cacheDir"/genesis
+                 "$node_specs"
+                 "$genesis_tmpdir"/genesis
+             )
+             genesis prepare-cache-entry "${genesis_args[@]}"
+             genesis_cache_entry=$(realpath "$genesis_tmpdir"/genesis)
+             rm -f "$genesis_tmpdir"/genesis
+             rmdir "$genesis_tmpdir"
+        fi
 
+        ## 2. allocate time
+        local timing=$(profile allocate-time "$profile"/profile.json)
+        profile describe-timing "$timing"
+
+        ## 3. decide the tag:
+        local tag=$(jq '.start_tag' -r <<<$timing)$(if test "$batch" != 'plain'; then echo -n .$batch; fi).$hash.$profile_name
+
+        ## 4. allocate directory:
         local dir=$global_rundir/$tag
         local realdir=$(realpath --canonicalize-missing "$dir")
-        local cacheDir=$(envjqr 'cacheDir')
 
         test "$(dirname "$realdir")" = "$(realpath "$global_rundir")" ||
             fatal "profile | allocate bad tag/run dir:  $tag @ $dir"
         test ! -e "$dir" ||
             fatal "profile | allocate tag busy:  $tag @ $dir"
-        mkdir -p "$cacheDir" && test -w "$cacheDir" ||
-            fatal "profile | allocate failed to create writable cache directory:  $cacheDir"
         mkdir -p "$dir" && test -w "$dir" ||
             fatal "profile | allocate failed to create writable run directory:  $dir"
 
+        ## 5. populate the directory:
         if test -n "$profile"
         then
             test "$(jq -r .name $profile/profile.json)" = "$profile_name" ||
@@ -275,18 +299,13 @@ case "$op" in
         fi
         msg "run | allocate | profile:  $(if test -n "$profile"; then echo "pre-supplied ($profile_name):  $profile"; else echo "computed:  $profile_name"; fi)"
 
-        profile node-specs "$dir"/profile.json > "$dir"/node-specs.json
-
-        ## TODO:  AWS
-        local node_commit_desc=$(git_repo_commit_description '.')
+        jq '.' <<<$node_specs > "$dir"/node-specs.json
 
         local args=(
             --arg       tag              "$tag"
             --arg       batch            "$batch"
             --arg       profile_name     "$profile_name"
-            --argjson   timestamp        "$timestamp"
-            --arg       date             "$date"
-            --arg       node_commit_desc "$node_commit_desc"
+            --argjson   timing           "$timing"
             --slurpfile profile_content  "$dir"/profile.json
             --argjson   manifest         "$manifest"
         )
@@ -295,9 +314,7 @@ case "$op" in
              { tag:              $tag
              , batch:            $batch
              , profile:          $profile_name
-             , timestamp:        $timestamp
-             , date:             $date
-             , node_commit_desc: $node_commit_desc
+             , timing:           $timing
              , manifest:         $manifest
              , profile_content:  $profile_content[0]
              }
@@ -310,21 +327,13 @@ case "$op" in
         else topology make    "$dir"/profile.json "$dir"/topology
         fi
 
-        msg "run | allocate | genesis:  $(if test -n "$genesis_cache_entry"; then echo pre-supplied; else echo computed; fi)"
         if test   -n "$genesis_cache_entry"
         then genesis derive-from-cache      \
                      "$profile"             \
+                     "$timing"              \
                      "$genesis_cache_entry" \
                      "$dir"/genesis
-        else
-             local genesis_args=(
-                 ## Positionals:
-                 "$cacheDir"/genesis
-                 "$dir"/profile.json
-                 "$dir"/topology
-                 "$dir"/genesis
-             )
-             genesis prepare "${genesis_args[@]}"
+        else fail "internal error:  no genesis cache entry"
         fi
 
         ## Record geneses

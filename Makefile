@@ -58,7 +58,8 @@ cluster-shell-dev-trace: ARGS += --arg 'autoStartCluster' true --arg 'workbenchD
 fixed:                   ARGS += --arg 'autoStartCluster' true
 fixed:                   PROFILE = fixed-alzo
 forge-stress:            PROFILE = forge-stress-alzo
-shell-dev cluster-shell-dev cluster-shell-trace cluster-shell-dev-trace fixed forge-stress: shell
+forge-stress-lite:       PROFILE = forge-stress-lite-alzo
+shell-dev cluster-shell-dev cluster-shell-trace cluster-shell-dev-trace fixed forge-stress forge-stress-lite: shell
 
 test-smoke: smoke ## Build the 'workbench-smoke-test', same as the Hydra job
 smoke:

@@ -37,8 +37,6 @@ usage_main() {
     topology     (t)      Topology generation
     run          (r)      Managing cluster runs.  Default op is 'list'
 
-    explain-mode (x)      Explain current mode
-
   Options:
 
     --trace / --debug     set -x
@@ -119,8 +117,8 @@ start()
                                          backend=supervisor;;
 
         --verbose )                      export verbose=t;;
-        --trace | --debug )              run_args+=($1); set -x;;
-        --trace-wb | --trace-workbench ) run_args+=($1); export WORKBENCH_EXTRA_FLAGS=--trace;;
+        --trace | --debug )              set -x;;
+        --trace-wb | --trace-workbench ) export WORKBENCH_EXTRA_FLAGS=--trace;;
         --help )                         usage_start
                                          exit 1;;
         * ) fatal "while parsing remaining 'wb start' args:  $*";;
@@ -128,6 +126,7 @@ start()
 
     if test -n "$cabal_mode"
     then . $(dirname "$0")/lib-cabal.sh
+         workbench-prebuild-executables
     fi
 
     backend assert-is $backend
@@ -197,14 +196,13 @@ main() {
         topology     | topo | t ) topology            "$@";;
         run          | runs | r ) run                 "$@";;
 
-        explain-mode | x )        explain-mode $global_mode;;
-
         ## Internals:
         #
         scenario     | s )        scenario            "$@";;
         backend )                 backend             "$@";;
         call )                                        "$@";;
-        mode )                    echo -n      $global_mode;;
+        mode )                    echo -n     $global_mode;;
+        path )                    echo     $global_basedir;;
 
         ## Bail for help:
         * ) usage_main "$op"; exit 1;; esac
