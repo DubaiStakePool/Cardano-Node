@@ -347,7 +347,7 @@ rebuildChain run@Run{genesis} xs@(fmap snd -> machViews) = do
        , bfForged     = bfeForged    & handleMiss "Δt Forged"
        , bfAdopted    = bfeAdopted   & handleMiss "Δt Adopted (forger)"
        , bfChainDelta = bfeChainDelta
-       , bfAnnounced  = bfeAnnounced & handleMiss "Δt Announced (forger)"
+       , bfAnnounced  = bfeAnnounced <|> bfeAdopted & handleMiss "Δt Announced (forger)" -- FIXME: fallback alternative can be removed when consensus PR #3893 has landed
        , bfSending    = bfeSending   & handleMiss "Δt Sending (forger)"
        }
      , beObservations =
