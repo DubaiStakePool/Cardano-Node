@@ -48,7 +48,7 @@ import           Cardano.Ledger.Shelley.Genesis (ShelleyGenesis)
 
 type CardanoBlock = Consensus.CardanoBlock StandardCrypto
 
-toProtocolInfo :: SomeConsensusProtocol -> ProtocolInfo IO CardanoBlock
+toProtocolInfo :: SomeConsensusProtocol -> ProtocolInfo CardanoBlock
 toProtocolInfo (SomeConsensusProtocol CardanoBlockType info) = protocolInfo info
 toProtocolInfo _ = error "toProtocolInfo unknown protocol"
 

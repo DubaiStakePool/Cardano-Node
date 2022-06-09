@@ -922,7 +922,6 @@ newtype SocketPath = SocketPath
 mkProtocolInfoCardano ::
   GenesisConfig ->
   Consensus.ProtocolInfo
-    IO
     (HFC.HardForkBlock
             (Consensus.CardanoEras Consensus.StandardCrypto))
 mkProtocolInfoCardano (GenesisCardano dnc byronGenesis shelleyGenesis alonzoGenesis)

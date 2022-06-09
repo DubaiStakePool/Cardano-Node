@@ -37,7 +37,7 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 
 class (RunNode blk, IOLike m) => Protocol m blk where
   data ProtocolInfoArgs m blk
-  protocolInfo :: ProtocolInfoArgs m blk -> ProtocolInfo m blk
+  protocolInfo :: ProtocolInfoArgs m blk -> ProtocolInfo blk
 
 -- | Node client support for each consensus protocol.
 --
