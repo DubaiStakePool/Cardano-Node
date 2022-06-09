@@ -43,9 +43,11 @@ import           Ouroboros.Network.PeerSelection.Types (PeerAdvertise)
 import           Ouroboros.Network.Subscription.Dns (DnsSubscriptionTarget (..))
 import           Ouroboros.Network.Subscription.Ip (IPSubscriptionTarget (..))
 
-import           Cardano.Api.Protocol.Types (BlockType (..), protocolInfo)
+import           Cardano.Api.Protocol.Types (BlockType (..), SomeBlockType,
+                   protocolInfo)
 import           Cardano.Logging
 import           Cardano.Node.Configuration.Socket
+import           Cardano.Node.Protocol (ProtocolInstantiationError)
 import           Cardano.Node.Protocol.Types (Protocol (..), SomeConsensusProtocol (..))
 
 import           Cardano.Git.Rev (gitRev)
@@ -74,6 +76,17 @@ data StartupTrace blk =
   | StartupSocketConfigError SocketConfigError
 
   | StartupDBValidation
+
+  -- | Log that the block forging is being updated
+  | BlockForgingUpdate
+
+  -- | Protocol instantiation error when updating block forging
+  | BlockForgingUpdateError ProtocolInstantiationError
+
+  -- | Mismatched block type
+  | BlockForgingBlockTypeMismatch
+       SomeBlockType -- ^ expected
+       SomeBlockType -- ^ provided
 
   -- | Log that the network configuration is being updated.
   --

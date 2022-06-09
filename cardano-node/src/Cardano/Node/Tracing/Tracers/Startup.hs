@@ -129,6 +129,9 @@ namesStartupInfo = \case
   StartupNetworkMagic {}                    -> ["StartupNetworkMagic"]
   StartupSocketConfigError {}               -> ["StartupSocketConfigError"]
   StartupDBValidation {}                    -> ["StartupDBValidation"]
+  BlockForgingUpdate {}                     -> ["BlockForgingUpdate"]
+  BlockForgingUpdateError {}                -> ["BlockForgingUpdateError"]
+  BlockForgingBlockTypeMismatch {}          -> ["BlockForgingBlockTypeMismatch"]
   NetworkConfigUpdate {}                    -> ["NetworkConfigUpdate"]
   NetworkConfigUpdateUnsupported            -> ["NetworkConfigUpdateUnsupported"]
   NetworkConfigUpdateError {}               -> ["NetworkConfigUpdateError"]
@@ -197,6 +200,17 @@ instance ( Show (BlockNodeToNodeVersion blk)
   forMachine _dtal StartupDBValidation =
       mconcat [ "kind" .= String "StartupDBValidation"
                , "message" .= String "start db validation" ]
+  forMachine _dtal BlockForgingUpdate =
+      mconcat [ "kind" .= String "BlockForgingUpdate" ]
+  forMachine _dtal (BlockForgingUpdateError err) =
+      mconcat [ "kind" .= String "BlockForgingUpdateError"
+              , "error" .= String (showT err)
+              ]
+  forMachine _dtal (BlockForgingBlockTypeMismatch expected provided) =
+      mconcat [ "kind" .= String "BlockForgingBlockTypeMismatch"
+              , "expected" .= String (showT expected)
+              , "provided" .= String (showT provided)
+              ]
   forMachine _dtal NetworkConfigUpdate =
       mconcat [ "kind" .= String "NetworkConfigUpdate"
                , "message" .= String "network configuration update" ]
@@ -301,7 +315,13 @@ ppStartupInfoTrace (StartupSocketConfigError err) =
   pack $ renderSocketConfigError err
 
 ppStartupInfoTrace StartupDBValidation = "Performing DB validation"
-
+ppStartupInfoTrace BlockForgingUpdate = "Performing block forging reconfiguration"
+ppStartupInfoTrace (BlockForgingUpdateError err) = "Block forging reconfiguration error " <> showT err
+ppStartupInfoTrace (BlockForgingBlockTypeMismatch expected provided) =
+  "Block forging reconfiguration block type mismatch: expected "
+    <> showT expected
+    <> " provided "
+    <> showT provided
 ppStartupInfoTrace NetworkConfigUpdate = "Performing topology configuration update"
 ppStartupInfoTrace NetworkConfigUpdateUnsupported =
   "Network topology reconfiguration is not supported in non-p2p mode"
@@ -390,6 +410,18 @@ docStartupInfo = Documented [
       ""
   , DocMsg
       ["StartupDBValidation"]
+      []
+      ""
+  , DocMsg
+      ["BlockForgingUpdate"]
+      []
+      ""
+  , DocMsg
+      ["BlockForgingUpdateError"]
+      []
+      ""
+  , DocMsg
+      ["BlockForgingBlockTypeMismatch"]
       []
       ""
   , DocMsg

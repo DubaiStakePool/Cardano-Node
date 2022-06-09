@@ -148,8 +148,8 @@ runNode cmdPc = do
               in getNetworkMagic $ Consensus.configBlock pInfoConfig
 
     case p of
-      SomeConsensusProtocol _ runP ->
-        handleNodeWithTracers cmdPc nc p networkMagic runP
+      SomeConsensusProtocol blockType runP ->
+        handleNodeWithTracers cmdPc nc p networkMagic blockType runP
 
 -- | Workaround to ensure that the main thread throws an async exception on
 -- receiving a SIGTERM signal.
@@ -179,9 +179,10 @@ handleNodeWithTracers
   -> NodeConfiguration
   -> SomeConsensusProtocol
   -> NetworkMagic
+  -> Protocol.BlockType blk
   -> Protocol.ProtocolInfoArgs IO blk
   -> IO ()
-handleNodeWithTracers cmdPc nc p networkMagic runP = do
+handleNodeWithTracers cmdPc nc p networkMagic blockType runP = do
   -- This IORef contains node kernel structure which holds node kernel.
   -- Used for ledger queries and peer connection status.
   nodeKernelData <- mkNodeKernelData
@@ -200,7 +201,7 @@ handleNodeWithTracers cmdPc nc p networkMagic runP = do
               networkMagic
               nodeKernelData
               p2pMode
-          handleSimpleNode runP p2pMode tracers nc
+          handleSimpleNode blockType runP p2pMode tracers nc
             (\nk -> do
                 setNodeKernel nodeKernelData nk
                 traceWith (nodeStateTracer tracers) NodeKernelOnline)
@@ -241,7 +242,7 @@ handleNodeWithTracers cmdPc nc p networkMagic runP = do
               $ \_peerLoggingThread ->
                 -- We ignore peer logging thread if it dies, but it will be killed
                 -- when 'handleSimpleNode' terminates.
-                    handleSimpleNode runP p2pMode tracers nc
+                    handleSimpleNode blockType runP p2pMode tracers nc
                       (\nk -> do
                           setNodeKernel nodeKernelData nk
                           traceWith (nodeStateTracer tracers) NodeKernelOnline)
@@ -297,7 +298,8 @@ handleSimpleNode
   . ( RunNode blk
     , Protocol.Protocol IO blk
     )
-  => Protocol.ProtocolInfoArgs IO blk
+  => Protocol.BlockType blk
+  -> Protocol.ProtocolInfoArgs IO blk
   -> NetworkP2PMode p2p
   -> Tracers RemoteConnectionId LocalConnectionId blk p2p
   -> NodeConfiguration
@@ -306,7 +308,7 @@ handleSimpleNode
   -- layer is initialised.  This implies this function must not block,
   -- otherwise the node won't actually start.
   -> IO ()
-handleSimpleNode runP p2pMode tracers nc onKernel = do
+handleSimpleNode blockType runP p2pMode tracers nc onKernel = do
   logStartupWarnings
 
   traceWith (startupTracer tracers)
@@ -402,15 +404,24 @@ handleSimpleNode runP p2pMode tracers nc onKernel = do
         (localRootsVar :: StrictTVar IO [(Int, Map RelayAccessPoint PeerAdvertise)])  <- newTVarIO localRoots
         publicRootsVar <- newTVarIO publicRoots
         useLedgerVar   <- newTVarIO (useLedgerAfterSlot nt)
-#ifdef UNIX
-        _ <- Signals.installHandler
-              Signals.sigHUP
-              (updateTopologyConfiguration localRootsVar publicRootsVar useLedgerVar)
-              Nothing
-#endif
         void $
           Node.run
-            nodeArgs
+            nodeArgs {
+                rnNodeKernelHook = \registry nodeKernel -> do
+#ifdef UNIX
+                  _ <- Signals.installHandler
+                        Signals.sigHUP
+                        (Signals.Catch $ do
+                            updateBlockForging nodeKernel (ncProtocolConfig nc)
+                                                          (ncProtocolFiles nc)
+                            updateTopologyConfiguration localRootsVar
+                                                        publicRootsVar
+                                                        useLedgerVar
+                        )
+                        Nothing
+#endif
+                  rnNodeKernelHook nodeArgs registry nodeKernel
+            }
             StdRunNodeArgs
               { srnBfcMaxConcurrencyBulkSync   = unMaxConcurrencyBulkSync <$> ncMaxConcurrencyBulkSync nc
               , srnBfcMaxConcurrencyDeadline   = unMaxConcurrencyDeadline <$> ncMaxConcurrencyDeadline nc
@@ -428,14 +439,6 @@ handleSimpleNode runP p2pMode tracers nc onKernel = do
               , srnMaybeMempoolCapacityOverride = ncMaybeMempoolCapacityOverride nc
               }
       DisabledP2PMode -> do
-#ifdef UNIX
-        _ <- Signals.installHandler
-              Signals.sigHUP
-              (Signals.Catch $ do
-                traceWith (startupTracer tracers) NetworkConfigUpdateUnsupported
-              )
-              Nothing
-#endif
         eitherTopology <- TopologyNonP2P.readTopologyFile nc
         nt <- either (\err -> panic $ "Cardano.Node.Run.handleSimpleNodeNonP2P.readTopologyFile: " <> err) pure eitherTopology
         let (ipProducerAddrs, dnsProducerAddrs) = producerAddressesNonP2P nt
@@ -453,7 +456,20 @@ handleSimpleNode runP p2pMode tracers nc onKernel = do
                            (length ipProducerAddrs)
         void $
           Node.run
-            nodeArgs
+            nodeArgs {
+                rnNodeKernelHook = \registry nodeKernel -> do
+#ifdef UNIX
+                  _ <- Signals.installHandler
+                        Signals.sigHUP
+                        (Signals.Catch $ do
+                          updateBlockForging nodeKernel (ncProtocolConfig nc)
+                                                        (ncProtocolFiles nc)
+                          traceWith (startupTracer tracers) NetworkConfigUpdateUnsupported
+                        )
+                        Nothing
+#endif
+                  rnNodeKernelHook nodeArgs registry nodeKernel
+            }
             StdRunNodeArgs
               { srnBfcMaxConcurrencyBulkSync   = unMaxConcurrencyBulkSync <$> ncMaxConcurrencyBulkSync nc
               , srnBfcMaxConcurrencyDeadline   = unMaxConcurrencyDeadline <$> ncMaxConcurrencyDeadline nc
@@ -502,12 +518,34 @@ handleSimpleNode runP p2pMode tracers nc onKernel = do
                      developmentNtcVersions)
 
 #ifdef UNIX
+  updateBlockForging :: NodeKernel IO RemoteConnectionId LocalConnectionId blk
+                     -> NodeProtocolConfiguration
+                     -> ProtocolFilepaths -> IO ()
+  updateBlockForging nodeKernel ncProtocolConfig ncProtocolFiles = do
+    eitherSomeProtocol <- runExceptT $ mkConsensusProtocol
+                                         ncProtocolConfig
+                                         (Just ncProtocolFiles)
+    case eitherSomeProtocol of
+      Left err ->
+        traceWith (startupTracer tracers) (BlockForgingUpdateError err)
+      Right (SomeConsensusProtocol blockType' runP') ->
+        case Protocol.reflBlockType blockType blockType' of
+          Just Refl -> do 
+            -- TODO: check if runP' has changed
+            traceWith (startupTracer tracers) BlockForgingUpdate
+            Protocol.blockForging runP' >>= setBlockForging nodeKernel
+          Nothing ->
+            traceWith (startupTracer tracers)
+              $ BlockForgingBlockTypeMismatch
+                  (Protocol.SomeBlockType blockType)
+                  (Protocol.SomeBlockType blockType')
+    return ()
+
   updateTopologyConfiguration :: StrictTVar IO [(Int, Map RelayAccessPoint PeerAdvertise)]
                               -> StrictTVar IO [RelayAccessPoint]
                               -> StrictTVar IO UseLedgerAfter
-                              -> Signals.Handler
-  updateTopologyConfiguration localRootsVar publicRootsVar useLedgerVar =
-    Signals.Catch $ do
+                              -> IO ()
+  updateTopologyConfiguration localRootsVar publicRootsVar useLedgerVar = do
       traceWith (startupTracer tracers) NetworkConfigUpdate
       result <- try $ readTopologyFileOrError nc
       case result of
