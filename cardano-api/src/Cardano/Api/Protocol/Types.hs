@@ -6,9 +6,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Cardano.Api.Protocol.Types
   ( BlockType(..)
+  , SomeBlockType (..)
+  , reflBlockType
   , Protocol(..)
   , ProtocolInfoArgs(..)
   , ProtocolClient(..)
@@ -170,3 +173,14 @@ data BlockType blk where
 deriving instance Eq (BlockType blk)
 deriving instance Show (BlockType blk)
 
+reflBlockType :: BlockType blk -> BlockType blk' -> Maybe (blk :~: blk')
+reflBlockType ByronBlockType ByronBlockType     = Just Refl
+reflBlockType ShelleyBlockType ShelleyBlockType = Just Refl
+reflBlockType CardanoBlockType CardanoBlockType = Just Refl
+reflBlockType _                _                = Nothing
+
+
+data SomeBlockType where
+  SomeBlockType :: BlockType blk -> SomeBlockType
+
+deriving instance Show SomeBlockType
