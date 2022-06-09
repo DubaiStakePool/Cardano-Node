@@ -379,6 +379,8 @@ handleSimpleNode runP p2pMode tracers nc onKernel = do
           , rnTraceNTC       = nodeToClientTracers tracers
           , rnProtocolInfo   = pInfo
           , rnNodeKernelHook = \registry nodeKernel -> do
+              -- set the initial block forging
+              Protocol.blockForging runP >>= setBlockForging nodeKernel
               maybeSpawnOnSlotSyncedShutdownHandler
                 (ncShutdownConfig nc)
                 (shutdownTracer tracers)
