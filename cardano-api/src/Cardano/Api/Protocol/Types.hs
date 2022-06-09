@@ -17,6 +17,7 @@ module Cardano.Api.Protocol.Types
 
 import           Cardano.Prelude
 
+import           Ouroboros.Consensus.Block.Forging (BlockForging)
 import           Ouroboros.Consensus.Cardano
 import           Ouroboros.Consensus.Cardano.Block
 import           Ouroboros.Consensus.Cardano.ByronHFC (ByronBlockHFC)
@@ -38,6 +39,7 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 class (RunNode blk, IOLike m) => Protocol m blk where
   data ProtocolInfoArgs m blk
   protocolInfo :: ProtocolInfoArgs m blk -> ProtocolInfo blk
+  blockForging :: ProtocolInfoArgs m blk -> m [BlockForging m blk]
 
 -- | Node client support for each consensus protocol.
 --
@@ -53,6 +55,7 @@ class RunNode blk => ProtocolClient blk where
 instance IOLike m => Protocol m ByronBlockHFC where
   data ProtocolInfoArgs m ByronBlockHFC = ProtocolInfoArgsByron ProtocolParamsByron
   protocolInfo (ProtocolInfoArgsByron params) = inject $ protocolInfoByron params
+  blockForging (ProtocolInfoArgsByron params) = pure $ inject <$> blockForgingByron params
 
 instance (CardanoHardForkConstraints StandardCrypto, IOLike m) => Protocol m (CardanoBlock StandardCrypto) where
   data ProtocolInfoArgs m (CardanoBlock StandardCrypto) =
@@ -97,6 +100,33 @@ instance (CardanoHardForkConstraints StandardCrypto, IOLike m) => Protocol m (Ca
       paramsMaryAlonzo
       paramsAlonzoBabbage
 
+  blockForging (ProtocolInfoArgsCardano
+               paramsByron
+               paramsShelleyBased
+               paramsShelley
+               paramsAllegra
+               paramsMary
+               paramsAlonzo
+               paramsBabbage
+               paramsByronShelley
+               paramsShelleyAllegra
+               paramsAllegraMary
+               paramsMaryAlonzo
+               paramsAlonzoBabbage) =
+    blockForgingCardano
+      paramsByron
+      paramsShelleyBased
+      paramsShelley
+      paramsAllegra
+      paramsMary
+      paramsAlonzo
+      paramsBabbage
+      paramsByronShelley
+      paramsShelleyAllegra
+      paramsAllegraMary
+      paramsMaryAlonzo
+      paramsAlonzoBabbage
+
 instance ProtocolClient ByronBlockHFC where
   data ProtocolClientInfoArgs ByronBlockHFC =
     ProtocolClientInfoArgsByron EpochSlots
@@ -120,6 +150,8 @@ instance ( IOLike m
     (ProtocolParamsShelley StandardCrypto)
   protocolInfo (ProtocolInfoArgsShelley paramsShelleyBased paramsShelley) =
     inject $ protocolInfoShelley paramsShelleyBased paramsShelley
+  blockForging (ProtocolInfoArgsShelley paramsShelleyBased paramsShelley) =
+    map inject <$> blockForgingShelley paramsShelleyBased paramsShelley
 
 instance Consensus.LedgerSupportsProtocol
           (Consensus.ShelleyBlock
