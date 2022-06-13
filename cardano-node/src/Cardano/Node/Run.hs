@@ -408,18 +408,9 @@ handleSimpleNode blockType runP p2pMode tracers nc onKernel = do
           Node.run
             nodeArgs {
                 rnNodeKernelHook = \registry nodeKernel -> do
-#ifdef UNIX
-                  _ <- Signals.installHandler
-                        Signals.sigHUP
-                        (Signals.Catch $ do
-                            updateBlockForging nodeKernel (ncProtocolConfig nc)
-                                                          (ncProtocolFiles nc)
-                            updateTopologyConfiguration localRootsVar
-                                                        publicRootsVar
-                                                        useLedgerVar
-                        )
-                        Nothing
-#endif
+                  installP2PSigHUPHandler (startupTracer tracers) blockType nc nodeKernel
+                                          localRootsVar publicRootsVar useLedgerVar
+
                   rnNodeKernelHook nodeArgs registry nodeKernel
             }
             StdRunNodeArgs
@@ -458,16 +449,7 @@ handleSimpleNode blockType runP p2pMode tracers nc onKernel = do
           Node.run
             nodeArgs {
                 rnNodeKernelHook = \registry nodeKernel -> do
-#ifdef UNIX
-                  _ <- Signals.installHandler
-                        Signals.sigHUP
-                        (Signals.Catch $ do
-                          updateBlockForging nodeKernel (ncProtocolConfig nc)
-                                                        (ncProtocolFiles nc)
-                          traceWith (startupTracer tracers) NetworkConfigUpdateUnsupported
-                        )
-                        Nothing
-#endif
+                  installNonP2PSigHUPHandler (startupTracer tracers) blockType nc nodeKernel
                   rnNodeKernelHook nodeArgs registry nodeKernel
             }
             StdRunNodeArgs
@@ -517,52 +499,6 @@ handleSimpleNode blockType runP p2pMode tracers nc onKernel = do
                      developmentNtnVersions
                      developmentNtcVersions)
 
-#ifdef UNIX
-  updateBlockForging :: NodeKernel IO RemoteConnectionId LocalConnectionId blk
-                     -> NodeProtocolConfiguration
-                     -> ProtocolFilepaths -> IO ()
-  updateBlockForging nodeKernel ncProtocolConfig ncProtocolFiles = do
-    eitherSomeProtocol <- runExceptT $ mkConsensusProtocol
-                                         ncProtocolConfig
-                                         (Just ncProtocolFiles)
-    case eitherSomeProtocol of
-      Left err ->
-        traceWith (startupTracer tracers) (BlockForgingUpdateError err)
-      Right (SomeConsensusProtocol blockType' runP') ->
-        case Protocol.reflBlockType blockType blockType' of
-          Just Refl -> do 
-            -- TODO: check if runP' has changed
-            traceWith (startupTracer tracers) BlockForgingUpdate
-            Protocol.blockForging runP' >>= setBlockForging nodeKernel
-          Nothing ->
-            traceWith (startupTracer tracers)
-              $ BlockForgingBlockTypeMismatch
-                  (Protocol.SomeBlockType blockType)
-                  (Protocol.SomeBlockType blockType')
-    return ()
-
-  updateTopologyConfiguration :: StrictTVar IO [(Int, Map RelayAccessPoint PeerAdvertise)]
-                              -> StrictTVar IO [RelayAccessPoint]
-                              -> StrictTVar IO UseLedgerAfter
-                              -> IO ()
-  updateTopologyConfiguration localRootsVar publicRootsVar useLedgerVar = do
-      traceWith (startupTracer tracers) NetworkConfigUpdate
-      result <- try $ readTopologyFileOrError nc
-      case result of
-        Left (FatalError err) ->
-          traceWith (startupTracer tracers)
-                  $ NetworkConfigUpdateError
-                  $ pack "Error reading topology configuration file:" <> err
-        Right nt -> do
-          let (localRoots, publicRoots) = producerAddresses nt
-          traceWith (startupTracer tracers)
-                  $ NetworkConfig localRoots publicRoots (useLedgerAfterSlot nt)
-          atomically $ do
-            writeTVar localRootsVar localRoots
-            writeTVar publicRootsVar publicRoots
-            writeTVar useLedgerVar (useLedgerAfterSlot nt)
-#endif
-
   limitToLatestReleasedVersion :: forall k v.
        Ord k
     => ((Maybe NodeToNodeVersion, Maybe NodeToClientVersion) -> Maybe k)
@@ -574,6 +510,104 @@ handleSimpleNode blockType runP p2pMode tracers nc onKernel = do
       case prj $ latestReleasedNodeVersion (Proxy @blk) of
         Nothing       -> id
         Just version_ -> Map.takeWhileAntitone (<= version_)
+
+--------------------------------------------------------------------------------
+-- SIGHUP Handlers
+--------------------------------------------------------------------------------
+
+-- | The P2P SIGHUP handler can update block forging & reconfigure network topology.
+--
+installP2PSigHUPHandler :: Tracer IO (StartupTrace blk)
+                        -> Protocol.BlockType blk
+                        -> NodeConfiguration
+                        -> NodeKernel IO RemoteConnectionId LocalConnectionId blk
+                        -> StrictTVar IO [(Int, Map RelayAccessPoint PeerAdvertise)]
+                        -> StrictTVar IO [RelayAccessPoint]
+                        -> StrictTVar IO UseLedgerAfter
+                        -> IO ()
+#ifndef UNIX
+installP2PSigHUPHandler _ _ _ _ _ _ _ = return ()
+#else
+installP2PSigHUPHandler startupTracer blockType nc nodeKernel localRootsVar publicRootsVar useLedgerVar =
+  void $ Signals.installHandler
+    Signals.sigHUP
+    (Signals.Catch $ do
+      updateBlockForging startupTracer blockType nodeKernel nc
+      updateTopologyConfiguration startupTracer nc localRootsVar publicRootsVar useLedgerVar
+    )
+    Nothing
+#endif
+
+-- | The NonP2P SIGHUP handler can only update block forging.
+--
+installNonP2PSigHUPHandler :: Tracer IO (StartupTrace blk)
+                           -> Protocol.BlockType blk
+                           -> NodeConfiguration
+                           -> NodeKernel IO RemoteConnectionId LocalConnectionId blk
+                           -> IO ()
+#ifndef UNIX
+installNonP2PSigHUPHandler _ _ _ _ = return ()
+#else
+installNonP2PSigHUPHandler startupTracer blockType nc nodeKernel =
+  void $ Signals.installHandler
+    Signals.sigHUP
+    (Signals.Catch $ do
+      updateBlockForging startupTracer blockType nodeKernel nc
+      traceWith startupTracer NetworkConfigUpdateUnsupported
+    )
+    Nothing
+#endif
+
+
+#ifdef UNIX
+updateBlockForging :: Tracer IO (StartupTrace blk)
+                   -> Protocol.BlockType blk
+                   -> NodeKernel IO RemoteConnectionId LocalConnectionId blk
+                   -> NodeConfiguration
+                   -> IO ()
+updateBlockForging startupTracer blockType nodeKernel nc = do
+  eitherSomeProtocol <- runExceptT $ mkConsensusProtocol
+                                       (ncProtocolConfig nc)
+                                       (Just (ncProtocolFiles nc))
+  case eitherSomeProtocol of
+    Left err ->
+      traceWith startupTracer (BlockForgingUpdateError err)
+    Right (SomeConsensusProtocol blockType' runP') ->
+      case Protocol.reflBlockType blockType blockType' of
+        Just Refl -> do
+          -- TODO: check if runP' has changed
+          traceWith startupTracer BlockForgingUpdate
+          Protocol.blockForging runP' >>= setBlockForging nodeKernel
+        Nothing ->
+          traceWith startupTracer
+            $ BlockForgingBlockTypeMismatch
+                (Protocol.SomeBlockType blockType)
+                (Protocol.SomeBlockType blockType')
+  return ()
+
+updateTopologyConfiguration :: Tracer IO (StartupTrace blk)
+                            -> NodeConfiguration
+                            -> StrictTVar IO [(Int, Map RelayAccessPoint PeerAdvertise)]
+                            -> StrictTVar IO [RelayAccessPoint]
+                            -> StrictTVar IO UseLedgerAfter
+                            -> IO ()
+updateTopologyConfiguration startupTracer nc localRootsVar publicRootsVar useLedgerVar = do
+    traceWith startupTracer NetworkConfigUpdate
+    result <- try $ readTopologyFileOrError nc
+    case result of
+      Left (FatalError err) ->
+        traceWith startupTracer
+                $ NetworkConfigUpdateError
+                $ pack "Error reading topology configuration file:" <> err
+      Right nt -> do
+        let (localRoots, publicRoots) = producerAddresses nt
+        traceWith startupTracer
+                $ NetworkConfig localRoots publicRoots (useLedgerAfterSlot nt)
+        atomically $ do
+          writeTVar localRootsVar localRoots
+          writeTVar publicRootsVar publicRoots
+          writeTVar useLedgerVar (useLedgerAfterSlot nt)
+#endif
 
 --------------------------------------------------------------------------------
 -- Helper functions
