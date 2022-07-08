@@ -291,13 +291,20 @@ def all_profile_variants:
     { desc: "Stop as soon as we've seen a single block"
     }) as $startstop_base
   |
-   ($scenario_fixed_loaded * $doublet * $dataset_miniature * $for_3blk *
+   ($scenario_fixed_loaded * $doublet * $dataset_empty * $for_3blk *
     { desc: "Miniature dataset, CI-friendly duration, test scale"
     }) as $citest_base
   |
    ($scenario_fixed_loaded * $doublet * $dataset_miniature * $for_15blk *
     { desc: "Miniature dataset, CI-friendly duration, bench scale"
     }) as $cibench_base
+  |
+   ($scenario_fixed_loaded * $doublet * $dataset_oct2021 *
+    { node:
+      { shutdown_on_slot_synced:        2400
+      }
+    , desc: "Oct 2021 dataset size, honest four epochs."
+    }) as $forge_stress_pre_base
   |
    ($scenario_fixed_loaded * $doublet * $dataset_status_quo *
     { node:
@@ -350,6 +357,10 @@ def all_profile_variants:
   , $plutus *
     { name: "plutus"
     , desc: "Default with Plutus workload"
+    }
+  , $old_tracing *
+    { name: "oldtracing"
+    , desc: "Default in legacy tracing mode"
     }
 
   ## Fastest -- start-stop
@@ -448,6 +459,16 @@ def all_profile_variants:
     { name: "forge-stress-notracer"
     }
 
+  , $forge_stress_pre_base *
+    { name: "forge-stress-pre"
+    }
+  , $forge_stress_pre_base * $plutus *
+    { name: "forge-stress-pre-plutus"
+    }
+  , $forge_stress_pre_base * $without_tracer *
+    { name: "forge-stress-pre-notracer"
+    }
+
   , $scenario_chainsync * $chaindb_early_byron *
     { name: "chainsync-early-byron"
     }
@@ -469,5 +490,25 @@ def all_profile_variants:
     }
   , $scenario_chainsync * $chaindb_early_alonzo * $p2p *
     { name: "chainsync-early-alonzo-p2p"
+    }
+
+  ## Last, but not least, the profile used by "nix-shell -A devops":
+  , { name: "devops"
+    , scenario:               "idle"
+    , genesis:
+      { slot_duration:         0.2
+      , parameter_k:           10
+      , epoch_length:          1000
+      , active_slots_coeff:    0.1
+      , genesis_future_offset: "10 seconds"
+      , utxo:                  0
+
+      , shelley:
+        { updateQuorum:        1
+        }
+      }
+    , analysis:
+      { type:                  null
+      }
     }
   ];
