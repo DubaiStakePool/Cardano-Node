@@ -430,6 +430,7 @@ instance HasPrivacyAnnotation (ConnectionManagerTrace addr connTrace)
 instance HasSeverityAnnotation (ConnectionManagerTrace addr (ConnectionHandlerTrace versionNumber agreedOptions)) where
   getSeverityAnnotation ev =
     case ev of
+      TrUnknownConnection {}                  -> Debug
       TrIncludeConnection {}                  -> Debug
       TrUnregisterConnection {}               -> Debug
       TrConnect {}                            -> Debug
@@ -1784,6 +1785,7 @@ instance (Show addr, Show versionNumber, Show agreedOptions, ToObject addr,
       => ToObject (ConnectionManagerTrace addr (ConnectionHandlerTrace versionNumber agreedOptions)) where
   toObject verb ev =
     case ev of
+      TrUnknownConnection {} -> mempty
       TrIncludeConnection prov peerAddr ->
         mconcat $ reverse
           [ "kind" .= String "IncludeConnection"

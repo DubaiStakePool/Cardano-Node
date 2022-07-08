@@ -731,6 +731,7 @@ docPeerSelectionActions' = Documented
 --------------------------------------------------------------------------------
 
 namesForConnectionManager :: ConnectionManagerTrace ntnAddr cht -> [Text]
+namesForConnectionManager TrUnknownConnection {}  = ["UnknownConnection"]
 namesForConnectionManager TrIncludeConnection {}  = ["IncludeConnection"]
 namesForConnectionManager TrUnregisterConnection {} = ["UnregisterConnection"]
 namesForConnectionManager TrConnect {}  = ["Connect"]
@@ -757,6 +758,7 @@ namesForConnectionManager ConnectionManager.TrUnexpectedlyFalseAssertion {} =
 severityConnectionManager ::
   ConnectionManagerTrace addr
     (ConnectionHandlerTrace versionNumber agreedOptions) -> SeverityS
+severityConnectionManager TrUnknownConnection {}                  = Debug
 severityConnectionManager TrIncludeConnection {}                  = Debug
 severityConnectionManager TrUnregisterConnection {}               = Debug
 severityConnectionManager TrConnect {}                            = Debug
@@ -791,6 +793,7 @@ severityConnectionManager ConnectionManager.TrUnexpectedlyFalseAssertion {} =
 instance (Show addr, Show versionNumber, Show agreedOptions, LogFormatting addr,
           ToJSON addr, ToJSON versionNumber, ToJSON agreedOptions)
       => LogFormatting (ConnectionManagerTrace addr (ConnectionHandlerTrace versionNumber agreedOptions)) where
+    forMachine _ TrUnknownConnection {} = mempty
     forMachine dtal (TrIncludeConnection prov peerAddr) =
         mconcat $ reverse
           [ "kind" .= String "IncludeConnection"
