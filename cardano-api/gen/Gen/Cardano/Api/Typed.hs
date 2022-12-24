@@ -24,6 +24,7 @@ module Gen.Cardano.Api.Typed
   , genTxOutTxContext
   , genTxOutUTxOContext
   , genUTxO
+  , genUTxOMas
 
     -- * Scripts
   , genReferenceScript
@@ -120,8 +121,8 @@ genAddressInEra era =
 
     ShelleyBasedEra _ ->
       Gen.choice
-        [ byronAddressInEra   <$> genAddressByron
-        , shelleyAddressInEra <$> genAddressShelley
+        [ -- byronAddressInEra   <$> genAddressByron
+         shelleyAddressInEra <$> genAddressShelley
         ]
 
 genKESPeriod :: Gen KESPeriod
@@ -259,7 +260,7 @@ genPolicyId =
 
 genAssetId :: Gen AssetId
 genAssetId = Gen.choice [ AssetId <$> genPolicyId <*> genAssetName
-                        , return AdaAssetId
+                       -- , return AdaAssetId
                         ]
 
 genQuantity :: Range Integer -> Gen Quantity
@@ -270,12 +271,12 @@ genSignedQuantity :: Gen Quantity
 genSignedQuantity = genQuantity (Range.constantFrom 0 (-2) 2)
 
 genUnsignedQuantity :: Gen Quantity
-genUnsignedQuantity = genQuantity (Range.constant 0 2)
+genUnsignedQuantity = genQuantity (Range.constant 1 2)
 
 genValue :: Gen AssetId -> Gen Quantity -> Gen Value
 genValue genAId genQuant =
   valueFromList <$>
-    Gen.list (Range.constant 0 10)
+    Gen.list (Range.constant 1 10)
              ((,) <$> genAId <*> genQuant)
 
 -- | Generate a 'Value' with any asset ID and a positive or negative quantity.
@@ -426,6 +427,32 @@ genReferenceScript era =
 genUTxO :: CardanoEra era -> Gen (UTxO era)
 genUTxO era =
   UTxO <$> Gen.map (Range.constant 0 5) ((,) <$> genTxIn <*> (toCtxUTxOTxOut <$> genTxOutTxContext era))
+
+genUTxOMas :: CardanoEra era -> Gen (UTxO era)
+genUTxOMas era =
+  UTxO <$> Gen.map (Range.constant 0 5) ((,) <$> genTxIn <*> (toCtxUTxOTxOut <$> genTxOutTxContextMa era))
+
+
+genTxOutTxContextMa :: CardanoEra era -> Gen (TxOut CtxTx era)
+genTxOutTxContextMa era =
+  TxOut <$> genAddressInEra era
+        <*> genTxOutValueMa era
+        <*> genTxOutDatumHashTxContext era
+        <*> genReferenceScript era
+
+genTxOutValueMa :: CardanoEra era -> Gen (TxOutValue era)
+genTxOutValueMa era =
+  case multiAssetSupportedInEra era of
+    Left adaOnlyInEra     -> TxOutAdaOnly adaOnlyInEra <$> genLovelace
+    Right multiAssetInEra -> do
+      v <- genValueForTxOutMa
+      let vList = filter (\(aId, _q) -> aId /= AdaAssetId) $ valueToList v
+      if null vList
+      then panic $ "genTxOutValueMa: No multiassets minted " <> show vList
+      else return $ TxOutValue multiAssetInEra v
+
+genValueForTxOutMa :: Gen Value
+genValueForTxOutMa = genValue genAssetId genUnsignedQuantity
 
 genTtl :: Gen SlotNo
 genTtl = genSlotNo
