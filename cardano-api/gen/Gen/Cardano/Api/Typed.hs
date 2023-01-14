@@ -173,7 +173,7 @@ genSimpleScript lang =
 genPlutusScript :: PlutusScriptVersion lang -> Gen (PlutusScript lang)
 genPlutusScript _ =
     -- We make no attempt to create a valid script
-    PlutusScriptSerialised . SBS.toShort <$> Gen.bytes (Range.linear 0 32)
+    PlutusScriptSerialised . SBS.toShort <$> Gen.bytes (Range.linear 1 32)
 
 genScriptData :: Gen ScriptData
 genScriptData =
@@ -248,6 +248,9 @@ genAssetName =
     , (1, AssetName <$> Gen.bytes (Range.constant 1 31))
     ]
 
+genAssetNameUnique :: Gen AssetName
+genAssetNameUnique = AssetName <$> Gen.bytes (Range.singleton 32)
+
 genPolicyId :: Gen PolicyId
 genPolicyId =
   Gen.frequency
@@ -259,7 +262,7 @@ genPolicyId =
     ]
 
 genAssetId :: Gen AssetId
-genAssetId = Gen.choice [ AssetId <$> genPolicyId <*> genAssetName
+genAssetId = Gen.choice [ AssetId <$> genPolicyId <*> genAssetNameUnique
                        -- , return AdaAssetId
                         ]
 
@@ -274,10 +277,10 @@ genUnsignedQuantity :: Gen Quantity
 genUnsignedQuantity = genQuantity (Range.constant 1 2)
 
 genValue :: Gen AssetId -> Gen Quantity -> Gen Value
-genValue genAId genQuant =
-  valueFromList <$>
-    Gen.list (Range.constant 1 10)
-             ((,) <$> genAId <*> genQuant)
+genValue genAId genQuant = do
+  ada <- (,) <$> return AdaAssetId <*> genQuant
+  l <- Gen.list (Range.constant 1 10) ((,) <$> genAId <*> genQuant)
+  return $ valueFromList $ ada : l
 
 -- | Generate a 'Value' with any asset ID and a positive or negative quantity.
 genValueDefault :: Gen Value
