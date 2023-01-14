@@ -177,6 +177,8 @@ module Cardano.Api (
     lovelaceToTxOutValue,
     TxOutDatum(..),
     parseHash,
+    TxOutInAnyEra(..),
+    prettyRenderTxOut,
 
     -- ** Other transaction body types
     TxInsCollateral(..),
@@ -644,6 +646,7 @@ module Cardano.Api (
     toLedgerPParams,
     fromLedgerPParams,
     toCtxUTxOTxOut,
+    txOutInAnyEra,
     --TODO: arrange not to export these
     fromNetworkMagic,
     toNetworkMagic,
