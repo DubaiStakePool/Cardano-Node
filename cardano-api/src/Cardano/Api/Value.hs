@@ -17,7 +17,7 @@ module Cardano.Api.Value
   , scriptPolicyId
   , AssetName(..)
   , AssetId(..)
-  , Value
+  , Value(..)
   , selectAsset
   , valueFromList
   , valueToList

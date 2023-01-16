@@ -109,7 +109,7 @@ module Cardano.Api (
     scriptPolicyId,
     AssetName(..),
     AssetId(..),
-    Value,
+    Value(..),
     parseValue,
     policyId,
     selectAsset,
