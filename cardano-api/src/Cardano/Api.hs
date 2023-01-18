@@ -106,6 +106,7 @@ module Cardano.Api (
     -- ** Multi-asset values
     Quantity(..),
     PolicyId(..),
+    renderPolicyId,
     scriptPolicyId,
     AssetName(..),
     AssetId(..),

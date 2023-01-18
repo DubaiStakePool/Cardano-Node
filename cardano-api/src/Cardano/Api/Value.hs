@@ -53,6 +53,8 @@ module Cardano.Api.Value
 
     -- * Data family instances
   , AsType(..)
+
+  , renderPolicyId
   ) where
 
 import           Prelude
