@@ -64,6 +64,7 @@ module Gen.Cardano.Api.Typed
   , genAssetId
   , genQuantity
   , genPolicyId
+  , genTxMetadata
   ) where
 
 import           Cardano.Api hiding (txIns)
