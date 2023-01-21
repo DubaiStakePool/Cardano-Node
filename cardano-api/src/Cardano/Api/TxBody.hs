@@ -27,6 +27,7 @@ module Cardano.Api.TxBody (
     TxBody(.., TxBody),
     makeTransactionBody,
     TxBodyContent(..),
+    getTxBodyContent,
     TxBodyError(..),
     TxBodyScriptData(..),
     TxScriptValidity(..),

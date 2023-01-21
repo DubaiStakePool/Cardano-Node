@@ -157,6 +157,7 @@ module Cardano.Api (
     TxBody(TxBody),
     makeTransactionBody,
     TxBodyContent(..),
+    getTxBodyContent,
     TxBodyError(..),
     TxBodyScriptData(..),
 
