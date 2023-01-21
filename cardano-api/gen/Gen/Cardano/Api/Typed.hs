@@ -281,10 +281,8 @@ genUnsignedQuantity :: Gen Quantity
 genUnsignedQuantity = genQuantity (Range.constant 1 2)
 
 genValue :: Gen AssetId -> Gen Quantity -> Gen Value
-genValue genAId genQuant = do
-  ada <- (,) <$> return AdaAssetId <*> genQuant
-  l <- Gen.list (Range.constant 1 10) ((,) <$> genAId <*> genQuant)
-  return $ valueFromList $ ada : l
+genValue genAId genQuant =
+  valueFromList <$> Gen.list (Range.constant 1 10) ((,) <$> genAId <*> genQuant)
 
 -- | Generate a 'Value' with any asset ID and a positive or negative quantity.
 genValueDefault :: Gen Value
