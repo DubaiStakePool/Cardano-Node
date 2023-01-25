@@ -121,8 +121,6 @@ in pkgs.commonLib.defServiceModule
       configExeArgsFn = cfg: [
           "json_highlevel"
           "${pkgs.writeText "tx-gen-config.json" (cfg.decideRunScript cfg)}"
-      ] ++ optionals (cfg.tracerSocketPath != null) [
-          "--cardano-tracer" cfg.tracerSocketPath
       ];
 
       configSystemdExtraConfig = _: {};
