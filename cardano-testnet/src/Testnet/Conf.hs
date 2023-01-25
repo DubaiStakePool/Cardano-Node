@@ -30,7 +30,7 @@ data Conf = Conf
   , base :: FilePath
   , socketDir :: FilePath
   , configurationTemplate :: FilePath
-  , testnetMagic :: Int
+  , testnetMagic :: Int -- TODO: Thise should be in CardanoTestnetOptions
   } deriving (Eq, Show)
 
 mkConf :: ProjectBase -> YamlFilePath -> FilePath -> Maybe Int -> H.Integration Conf

@@ -23,7 +23,6 @@ import           Testnet.Shelley as Shelley (ShelleyTestnetOptions, defaultTestn
 
 data TestnetOptions
   = ShelleyOnlyTestnetOptions ShelleyTestnetOptions
-  | BabbageOnlyTestnetOptions BabbageTestnetOptions
   | CardanoOnlyTestnetOptions CardanoTestnetOptions
   deriving (Eq, Show)
 
@@ -44,8 +43,8 @@ testnetMinimumConfigurationRequirements cTestnetOpts = do
 testnet :: TestnetOptions -> Conf -> Integration TestnetRuntime
 testnet options conf = case options of
   ShelleyOnlyTestnetOptions o -> shelleyTestnet o conf
-  BabbageOnlyTestnetOptions o -> babbageTestnet o conf
   CardanoOnlyTestnetOptions o -> do
+    -- Need to be able to switch to this: babbageTestnet o conf
     testnetMinimumConfigurationRequirements o
     cardanoTestnet o conf
 

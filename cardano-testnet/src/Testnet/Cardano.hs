@@ -9,7 +9,7 @@ module Testnet.Cardano
   , cardanoPoolNodes
   , cardanoBftNodes
   , cardanoNumPoolNodes
-  , extraBftNodeCliArgs
+  , extraNodeCliArgs
   , defaultTestnetOptions
   , TestnetNodeOptions(..)
   , cardanoDefaultTestnetNodeOptions
@@ -81,7 +81,7 @@ data ForkPoint
   | AtEpoch Int
   deriving (Show, Eq, Read)
 
-data Era = Byron | Shelley | Allegra | Mary | Alonzo deriving (Eq, Enum, Bounded, Read, Show)
+data Era = Byron | Shelley | Allegra | Mary | Alonzo | Babbage deriving (Eq, Enum, Bounded, Read, Show)
 
 data CardanoTestnetOptions = CardanoTestnetOptions
   { -- | List of node options. Each option will result in a single node being
@@ -99,7 +99,7 @@ data CardanoTestnetOptions = CardanoTestnetOptions
 defaultTestnetOptions :: CardanoTestnetOptions
 defaultTestnetOptions = CardanoTestnetOptions
   { cardanoNodes = cardanoDefaultTestnetNodeOptions
-  , cardanoEra = Alonzo
+  , cardanoEra = maxBound
   , cardanoEpochLength = 1500
   , cardanoSlotLength = 0.2
   , cardanoActiveSlotsCoeff = 0.2
@@ -113,18 +113,22 @@ data TestnetNodeOptions
   = BftTestnetNodeOptions [String]
     -- ^ These arguments will be appended to the default set of CLI options when
     -- starting the node.
-  | SpoTestnetNodeOptions
+  | SpoTestnetNodeOptions [String]
   deriving (Eq, Show)
 
-extraBftNodeCliArgs :: TestnetNodeOptions -> [String]
-extraBftNodeCliArgs (BftTestnetNodeOptions args) = args
-extraBftNodeCliArgs SpoTestnetNodeOptions = []
+isSpoNode :: TestnetNodeOptions -> Bool
+isSpoNode BftTestnetNodeOptions{} = False
+isSpoNode SpoTestnetNodeOptions{} = True
+
+extraNodeCliArgs :: TestnetNodeOptions -> [String]
+extraNodeCliArgs (BftTestnetNodeOptions args) = args
+extraNodeCliArgs (SpoTestnetNodeOptions args) = args
 
 cardanoPoolNodes :: [TestnetNodeOptions] -> [TestnetNodeOptions]
-cardanoPoolNodes = filter (== SpoTestnetNodeOptions)
+cardanoPoolNodes = filter isSpoNode
 
 cardanoBftNodes :: [TestnetNodeOptions] -> [TestnetNodeOptions]
-cardanoBftNodes = filter (/= SpoTestnetNodeOptions)
+cardanoBftNodes = filter (not . isSpoNode)
 
 cardanoNumPoolNodes :: [TestnetNodeOptions] -> Int
 cardanoNumPoolNodes = length . cardanoPoolNodes
@@ -134,9 +138,9 @@ cardanoNumBftNodes = length . cardanoBftNodes
 
 cardanoDefaultTestnetNodeOptions :: [TestnetNodeOptions]
 cardanoDefaultTestnetNodeOptions =
-  [ BftTestnetNodeOptions []
-  , BftTestnetNodeOptions []
-  , SpoTestnetNodeOptions
+  [ SpoTestnetNodeOptions []
+  , SpoTestnetNodeOptions []
+  , SpoTestnetNodeOptions []
   ]
 
 ifaceAddress :: String
@@ -184,6 +188,91 @@ mkTopologyConfig numNodes allPorts port True = J.encode topologyP2P
         []
         (P2P.UseLedger DontUseLedger)
 
+
+
+-- TODO: We need to have a split where we generate all of the necessary files for a testnet
+-- or we read user supplied files. Mixing both is confusing.
+-- TODO: We should default to the create staked command usage to avoid
+-- the song and dance of Byron era on-chain registration and delegation
+-- which further complicates things.
+
+-- | Generate all of the Byron related files. Note we are using the "create-staked"
+-- command which allows us to configure some initial stake pools and delegation to them,
+-- without requiring on-chain registration and delegation.
+cardanoTestnetCreateStaked
+  :: CardanoTestnetOptions
+  -> H.Conf -> H.Integration ()
+cardanoTestnetCreateStaked testnetOpts conf= do
+  -- Filepath related
+  let tempAbsFp = H.tempAbsPath conf
+      baseFp = H.base conf
+      initialYamlConfigFp = H.configurationTemplate conf
+
+  -- Testnet related
+  let numSpos = cardanoNumPoolNodes $ cardanoNodes testnetOpts
+      testnetMagic = H.testnetMagic conf
+      totalLovelaceSupply = cardanoMaxSupply testnetOpts
+
+  -- TODO: Refactor into a function
+  currentTime <- H.noteShowIO DTC.getCurrentTime
+  startTime <- H.noteShow $ DTC.addUTCTime startTimeOffsetSeconds currentTime
+
+  -- TODO: This should e configurable
+  let securityParam :: Int
+      securityParam = 10
+
+  -- 1. Handle all genesis related files
+
+  -- First we generate a Byron genesis file
+  execCli_
+     [ "byron"
+     , "genesis"
+     , "genesis"
+     , "--protocol-magic", show testnetMagic
+     , "--start-time", showUTCTimeSeconds startTime
+     , "--k", show securityParam
+     , "--n-poor-addresses", "0"
+     , "--n-delegate-addresses", show numSpos
+     , "--total-balance", show totalLovelaceSupply
+     , "--delegate-share", "1"
+     , "--avvm-entry-count", "0"
+     , "--avvm-entry-balance", "0"
+     , "--protocol-parameters-file", tempAbsFp </> "byron.genesis.spec.json"
+     , "--genesis-output-dir", tempAbsFp </> "byron"
+     ]
+
+  -- TODO: Explore the possibility of generating an Alonzo genesis file
+  -- as this is fragile and essentially requires users to use the cardano-testnet
+  -- executable in the cardano-node dir.
+  -- We link to a known Alonzo genesis.
+
+  let sourceAlonzoGenesisSpecFile = baseFp </> "cardano-cli/test/data/golden/alonzo/genesis.alonzo.spec.json"
+
+  -- Next, get config yaml file + update
+  yamlConfigFileInUse <- H.noteShow $ tempAbsFp </> "configuration.yaml"
+  H.readFile initialYamlConfigFp >>= H.writeFile yamlConfigFileInUse
+
+  -- Then call "create-staked". This generates a ShelleyGenesis with its
+  -- `sgStaking` field populated so that we can avoid manually delegating stake
+  -- to stake pools when we start our testnet.
+  execCli_
+      [ "genesis", "create-staked"
+      , "--genesis-dir", tempAbsFp </> "shelley"
+      , "--testnet-magic", show testnetMagic
+      , "--gen-pools", show numSpos
+      , "--supply", show totalLovelaceSupply
+      , "--supply-delegated", show totalLovelaceSupply
+      , "--gen-stake-delegs", show numSpos
+      , "--gen-utxo-keys", show numSpos
+      ]
+
+  -- Then we have to move files around and update the shelley genesis
+
+  -- Then we have to run the nodes....this can be abstracted out
+
+
+  return ()
+
 cardanoTestnet :: CardanoTestnetOptions -> H.Conf -> H.Integration TestnetRuntime
 cardanoTestnet testnetOptions H.Conf {..} = do
   void $ H.note OS.os
@@ -191,7 +280,9 @@ cardanoTestnet testnetOptions H.Conf {..} = do
   startTime <- H.noteShow $ DTC.addUTCTime startTimeOffsetSeconds currentTime
   configurationFile <- H.noteShow $ tempAbsPath </> "configuration.yaml"
   let numBftNodes = cardanoNumBftNodes $ cardanoNodes testnetOptions
-      bftNodesN = [1 .. numBftNodes]
+      bftNodesN = [1 .. numBftNodes] -- TODO: Here is likely your problem.
+      -- number of bft nodes is 0. Fix this in the byron genesis command
+      -- to give a more elaborate error
       poolNodesN = [1 .. cardanoNumPoolNodes $ cardanoNodes testnetOptions]
       bftNodeNames = ("node-bft" <>) . show @Int <$> bftNodesN
       poolNodeNames = ("node-pool" <>) . show @Int <$> poolNodesN
@@ -239,6 +330,13 @@ cardanoTestnet testnetOptions H.Conf {..} = do
           . HM.insert "TestMaryHardForkAtEpoch" (J.toJSON @Int 0)
           . HM.insert "TestAlonzoHardForkAtEpoch" (J.toJSON @Int 0)
           . HM.insert "LastKnownBlockVersion-Major" (J.toJSON @Int 6)
+        Babbage -> id
+          . HM.insert "TestShelleyHardForkAtEpoch" (J.toJSON @Int 0)
+          . HM.insert "TestAllegraHardForkAtEpoch" (J.toJSON @Int 0)
+          . HM.insert "TestMaryHardForkAtEpoch" (J.toJSON @Int 0)
+          . HM.insert "TestAlonzoHardForkAtEpoch" (J.toJSON @Int 0)
+          . HM.insert "TestBabbageHardForkAtEpoch" (J.toJSON @Int 0)
+          . HM.insert "LastKnownBlockVersion-Major" (J.toJSON @Int 8)
 
   -- We're going to use really quick epochs (300 seconds), by using short slots 0.2s
   -- and K=10, but we'll keep long KES periods so we don't have to bother
@@ -719,7 +817,7 @@ cardanoTestnet testnetOptions H.Conf {..} = do
         , "--shelley-operational-certificate", tempAbsPath </> node </> "shelley/node.cert"
         , "--delegation-certificate",  tempAbsPath </> node </> "byron/delegate.cert"
         , "--signing-key", tempAbsPath </> node </> "byron/delegate.key"
-        ] <> extraBftNodeCliArgs nodeOpts)
+        ] <> extraNodeCliArgs nodeOpts)
 
   H.threadDelay 100000
 

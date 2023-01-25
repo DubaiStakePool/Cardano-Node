@@ -39,9 +39,9 @@ hprop_shutdownOnSlotSynced = integration . H.runFinallies . H.workspace "chairma
         { cardanoEpochLength = 300
         , cardanoSlotLength = slotLen
         , cardanoNodes =
-          [ BftTestnetNodeOptions ["--shutdown-on-slot-synced", show maxSlot]
-          , BftTestnetNodeOptions []
-          , SpoTestnetNodeOptions
+          [ SpoTestnetNodeOptions ["--shutdown-on-slot-synced", show maxSlot]
+          , SpoTestnetNodeOptions []
+          , SpoTestnetNodeOptions []
           ]
         }
   TestnetRuntime { bftNodes = node:_ } <- testnet fastTestnetOptions conf

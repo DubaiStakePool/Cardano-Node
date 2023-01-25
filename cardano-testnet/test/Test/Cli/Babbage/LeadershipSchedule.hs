@@ -55,8 +55,8 @@ hprop_leadershipSchedule = integration . H.runFinallies . H.workspace "alonzo" $
   H.createDirectoryIfMissing work
 
   let
-    testnetOptions = BabbageOnlyTestnetOptions $ babbageDefaultTestnetOptions
-      { babbageNodeLoggingFormat = NodeLoggingFormatAsJson
+    testnetOptions = CardanoOnlyTestnetOptions $ cardanoDefaultTestnetOptions
+      { cardanoNodeLoggingFormat = NodeLoggingFormatAsJson
       }
   tr@TestnetRuntime
     { testnetMagic

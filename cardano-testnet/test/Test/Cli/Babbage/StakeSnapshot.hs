@@ -55,8 +55,8 @@ hprop_stakeSnapshot = integration . H.runFinallies . H.workspace "alonzo" $ \tem
   H.createDirectoryIfMissing work
 
   let
-    testnetOptions = BabbageOnlyTestnetOptions $ babbageDefaultTestnetOptions
-      { babbageNodeLoggingFormat = NodeLoggingFormatAsJson
+    testnetOptions = CardanoOnlyTestnetOptions $ cardanoDefaultTestnetOptions
+      { cardanoNodeLoggingFormat = NodeLoggingFormatAsJson
       }
 
   TestnetRuntime

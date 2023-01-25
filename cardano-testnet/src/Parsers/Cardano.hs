@@ -4,6 +4,10 @@ module Parsers.Cardano
   ( CardanoOptions(..)
   , cmdCardano
   , runCardanoOptions
+
+  -- ** Parsers
+  , pEnableP2P
+  , pEpochLength
   ) where
 
 import           Prelude
@@ -34,13 +38,7 @@ optsTestnet = CardanoTestnetOptions
       <>  OA.showDefault
       <>  OA.value (cardanoEra defaultTestnetOptions)
       )
-  <*> OA.option auto
-      (   OA.long "epoch-length"
-      <>  OA.help "Epoch length"
-      <>  OA.metavar "MILLISECONDS"
-      <>  OA.showDefault
-      <>  OA.value (cardanoEpochLength defaultTestnetOptions)
-      )
+  <*> pEpochLength
   <*> OA.option auto
       (   OA.long "slot-length"
       <>  OA.help "Slot length"
@@ -56,13 +54,7 @@ optsTestnet = CardanoTestnetOptions
       <>  OA.value (cardanoActiveSlotsCoeff defaultTestnetOptions)
       )
   <*> pMaxLovelaceSupply
-  <*> OA.option auto
-      (   OA.long "enable-p2p"
-      <>  OA.help "Enable P2P"
-      <>  OA.metavar "BOOL"
-      <>  OA.showDefault
-      <>  OA.value (cardanoEnableP2P defaultTestnetOptions)
-      )
+  <*> pEnableP2P
   <*> OA.option (OA.eitherReader readNodeLoggingFormat)
       (   OA.long "nodeLoggingFormat"
       <>  OA.help "Node logging format (json|text)"
@@ -70,6 +62,26 @@ optsTestnet = CardanoTestnetOptions
       <>  OA.showDefault
       <>  OA.value (cardanoNodeLoggingFormat defaultTestnetOptions)
       )
+
+pEnableP2P :: Parser Bool
+pEnableP2P =
+  OA.option auto
+      (   OA.long "enable-p2p"
+      <>  OA.help "Enable P2P"
+      <>  OA.metavar "BOOL"
+      <>  OA.showDefault
+      <>  OA.value (cardanoEnableP2P defaultTestnetOptions)
+      )
+
+pEpochLength :: Parser Int
+pEpochLength =
+  OA.option auto
+    (   OA.long "epoch-length"
+    <>  OA.help "Epoch length"
+    <>  OA.metavar "MILLISECONDS"
+    <>  OA.showDefault
+    <>  OA.value (cardanoEpochLength defaultTestnetOptions)
+    )
 
 pNumBftAndSpoNodes :: Parser [TestnetNodeOptions]
 pNumBftAndSpoNodes =
@@ -83,7 +95,7 @@ pNumBftAndSpoNodes =
           <>  OA.value (cardanoNodes defaultTestnetOptions)
           )
     <*> OA.option
-          ((`L.replicate` SpoTestnetNodeOptions) <$> auto)
+          ((`L.replicate` SpoTestnetNodeOptions []) <$> auto)
           (   OA.long "num-pool-nodes"
           <>  OA.help "Number of pool nodes"
           <>  OA.metavar "COUNT"
