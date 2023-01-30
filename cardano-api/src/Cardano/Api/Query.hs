@@ -47,6 +47,9 @@ module Cardano.Api.Query (
     EraHistory(..),
     SystemStart(..),
 
+    LedgerEpochInfo(..),
+    toLedgerEpochInfo,
+
     SlotsInEpoch(..),
     SlotsToEpochEnd(..),
 
@@ -59,10 +62,10 @@ module Cardano.Api.Query (
     -- * Internal conversion functions
     toLedgerUTxO,
     fromLedgerUTxO,
-
   ) where
 
 import           Control.Monad (forM)
+import           Control.Monad.Trans.Except
 import           Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.=))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser)
@@ -77,6 +80,7 @@ import qualified Data.Set as Set
 import           Data.Sharing (FromSharedCBOR, Interns, Share)
 import           Data.SOP.Strict (SListI)
 import           Data.Text (Text)
+import qualified Data.Text as Text
 import           Data.Typeable
 import           Prelude
 
@@ -86,6 +90,7 @@ import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import           Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch)
 import qualified Ouroboros.Consensus.HardFork.Combinator.AcrossEras as Consensus
 import qualified Ouroboros.Consensus.HardFork.Combinator.Degenerate as Consensus
+import qualified Ouroboros.Consensus.HardFork.History as Consensus
 import qualified Ouroboros.Consensus.HardFork.History as History
 import qualified Ouroboros.Consensus.HardFork.History.Qry as Qry
 
@@ -99,6 +104,7 @@ import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
 import           Ouroboros.Network.Block (Serialised (..))
 
 import           Cardano.Binary
+import           Cardano.Slotting.EpochInfo (hoistEpochInfo)
 import           Cardano.Slotting.Slot (WithOrigin (..))
 import           Cardano.Slotting.Time (SystemStart (..))
 
@@ -164,6 +170,14 @@ data EraHistory mode where
 
 getProgress :: SlotNo -> EraHistory mode -> Either Qry.PastHorizonException (RelativeTime, SlotLength)
 getProgress slotNo (EraHistory _ interpreter) = Qry.interpretQuery interpreter (Qry.slotToWallclock slotNo)
+
+
+newtype LedgerEpochInfo = LedgerEpochInfo { unLedgerEpochInfo :: Consensus.EpochInfo (Either Text) }
+
+toLedgerEpochInfo :: EraHistory mode -> LedgerEpochInfo
+toLedgerEpochInfo (EraHistory _ interpreter) =
+    LedgerEpochInfo $ hoistEpochInfo (first (Text.pack . show) . runExcept) $
+      Consensus.interpreterToEpochInfo interpreter
 
 --TODO: add support for these
 --     QueryEraStart   :: ConsensusModeIsMultiEra mode
