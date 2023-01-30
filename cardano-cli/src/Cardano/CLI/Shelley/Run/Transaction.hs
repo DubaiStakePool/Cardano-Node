@@ -546,7 +546,7 @@ runTxBuild (AnyCardanoEra era) (AnyConsensusModeParams cModeParams) networkId mS
       (BalancedTxBody balancedTxBody _ fee) <-
         firstExceptT ShelleyTxCmdBalanceTxBody
           . hoistEither
-          $ makeTransactionBodyAutoBalance eInMode systemStart eraHistory
+          $ makeTransactionBodyAutoBalance eInMode systemStart (toLedgerEpochInfo eraHistory)
                                            pparams stakePools txEraUtxo txBodyContent
                                            cAddr mOverrideWits
 
@@ -558,7 +558,7 @@ runTxBuild (AnyCardanoEra era) (AnyConsensusModeParams cModeParams) networkId mS
             Just executionUnitPrices -> do
               scriptExecUnitsMap <- firstExceptT ShelleyTxCmdTxExecUnitsErr $ hoistEither
                                       $ evaluateTransactionExecutionUnits
-                                          eInMode systemStart eraHistory
+                                          eInMode systemStart (toLedgerEpochInfo eraHistory)
                                           pparams txEraUtxo balancedTxBody
               scriptCostOutput <- firstExceptT ShelleyTxCmdPlutusScriptCostErr $ hoistEither
                                     $ renderScriptCosts
