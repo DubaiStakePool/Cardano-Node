@@ -24,6 +24,8 @@ module Cardano.CLI.Shelley.Run.Query
   , mergeDelegsAndRewards
   , percentage
   , executeQuery
+
+  , printFilteredUTxOs
   ) where
 
 import           Cardano.Prelude
