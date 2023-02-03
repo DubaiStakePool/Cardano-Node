@@ -1125,7 +1125,7 @@ makeTransactionBodyAutoBalance eraInMode systemstart history pparams
        Lovelace 0 -> rest
        -- We append change at the end so a client can predict the indexes
        -- of the outputs
-       _ -> rest ++ [change]
+       _ -> change : rest
 
    balanceCheck :: TxOutValue era -> Either TxBodyErrorAutoBalance ()
    balanceCheck balance
