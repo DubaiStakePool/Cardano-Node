@@ -24,6 +24,7 @@ module Cardano.CLI.Shelley.Run.Transaction
   , categoriseSomeWitness
   , validateTxMetadataInEra
   , renderReadWitnessSigningDataError
+  , validateTxMintValue
   ) where
 
 import           Cardano.Prelude hiding (All, Any)
