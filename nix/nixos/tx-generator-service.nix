@@ -41,7 +41,7 @@ let
   capitalise = x: (pkgs.lib.toUpper (__substring 0 1 x)) + __substring 1 99999 x;
 
   plutusScript = cfg: plutusScriptFile cfg cfg.plutusScript;
-  plutusScriptFile = cfg: filename: "${pkgs.plutus-scripts}/generated-plutus-scripts/${filename}";
+  plutusScriptFile = cfg: filename: "${pkgs.plutus-scripts}/generated-plutus-scripts/v1/${filename}";
   targetNodesList = targets: __attrValues (__mapAttrs
                                        (name: { ip, port }: { addr = ip; port = port; })
                                        targets);
