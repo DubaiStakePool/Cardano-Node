@@ -170,4 +170,4 @@ source-repository-package
    type: git
    location: https://github.com/input-output-hk/ekg-forward-fork
    tag: 6cf25fbbaf9815e07f695982da4cfbb1581239c3
-   --sha256: 0qwvx04l9q3h7acb0a3b8iarqcn5bkqhwaplbga5pvryqp3lhn00
+   --sha256: 1gk1bcq3p5gmdxn86hiazk4j9nqvds5l40hl8l6ljgcvik5il6d6
