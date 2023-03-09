@@ -477,6 +477,7 @@ module Cardano.Api (
     deserialiseFromTextEnvelope,
     readFileTextEnvelope,
     writeFileTextEnvelope,
+    textEnvelopeToJSON,
     writeFileTextEnvelopeWithOwnerPermissions,
     readTextEnvelopeFromFile,
     readTextEnvelopeOfTypeFromFile,
