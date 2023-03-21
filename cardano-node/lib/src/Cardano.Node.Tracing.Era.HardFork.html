@@ -1,0 +1,913 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE DerivingStrategies #-}</span><span>
+</span><span id="line-2"></span><span class="hs-pragma">{-# LANGUAGE FlexibleContexts #-}</span><span>
+</span><span id="line-3"></span><span class="hs-pragma">{-# LANGUAGE FlexibleInstances #-}</span><span>
+</span><span id="line-4"></span><span class="hs-pragma">{-# LANGUAGE MultiParamTypeClasses #-}</span><span>
+</span><span id="line-5"></span><span class="hs-pragma">{-# LANGUAGE NamedFieldPuns #-}</span><span>
+</span><span id="line-6"></span><span class="hs-pragma">{-# LANGUAGE OverloadedStrings #-}</span><span>
+</span><span id="line-7"></span><span class="hs-pragma">{-# LANGUAGE ScopedTypeVariables #-}</span><span>
+</span><span id="line-8"></span><span class="hs-pragma">{-# LANGUAGE TypeApplications #-}</span><span>
+</span><span id="line-9"></span><span class="hs-pragma">{-# LANGUAGE TypeFamilies #-}</span><span>
+</span><span id="line-10"></span><span class="hs-pragma">{-# LANGUAGE TypeOperators #-}</span><span>
+</span><span id="line-11"></span><span class="hs-pragma">{-# LANGUAGE UndecidableInstances #-}</span><span>
+</span><span id="line-12"></span><span>
+</span><span id="line-13"></span><span class="hs-pragma">{-# OPTIONS_GHC -Wno-orphans  #-}</span><span>
+</span><span id="line-14"></span><span>
+</span><span id="line-15"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Cardano.Node.Tracing.Era.HardFork</span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-16"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-17"></span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Cardano.Tracing.OrphanInstances.HardFork.html"><span class="hs-identifier">Cardano.Tracing.OrphanInstances.HardFork</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Aeson</span></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.SOP.Strict</span></span><span>
+</span><span id="line-22"></span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Cardano.Logging</span></span><span>
+</span><span id="line-24"></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Cardano.Slotting.Slot</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">EpochSize</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.Block</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">BlockProtocol</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">CannotForge</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">ForgeStateInfo</span></span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>                   </span><span class="annot"><span class="hs-identifier">ForgeStateUpdateError</span></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.BlockchainTime</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">getSlotLength</span></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.Cardano.Condense</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-30"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.HardFork.Combinator</span></span><span>
+</span><span id="line-31"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.HardFork.Combinator.AcrossEras</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">EraMismatch</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-32"></span><span>                   </span><span class="annot"><span class="hs-identifier">OneEraCannotForge</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">OneEraEnvelopeErr</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">OneEraForgeStateInfo</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-33"></span><span>                   </span><span class="annot"><span class="hs-identifier">OneEraForgeStateUpdateError</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">OneEraLedgerError</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-34"></span><span>                   </span><span class="annot"><span class="hs-identifier">OneEraLedgerUpdate</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">OneEraLedgerWarning</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">OneEraValidationErr</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-35"></span><span>                   </span><span class="annot"><span class="hs-identifier">mkEraMismatch</span></span><span class="hs-special">)</span><span>
+</span><span id="line-36"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.HardFork.Combinator.Condense</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-37"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.HardFork.History</span></span><span>
+</span><span id="line-38"></span><span>                   </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">EraParams</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">eraEpochSize</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">eraSafeZone</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">eraSlotLength</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-39"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.HardFork.History.EraParams</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">EraParams</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">EraParams</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-40"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.HeaderValidation</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">OtherHeaderEnvelopeError</span></span><span class="hs-special">)</span><span>
+</span><span id="line-41"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.Ledger.Abstract</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">LedgerError</span></span><span class="hs-special">)</span><span>
+</span><span id="line-42"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.Ledger.Inspect</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">LedgerUpdate</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">LedgerWarning</span></span><span class="hs-special">)</span><span>
+</span><span id="line-43"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.Ledger.SupportsMempool</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ApplyTxErr</span></span><span class="hs-special">)</span><span>
+</span><span id="line-44"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.Protocol.Abstract</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ValidationErr</span></span><span class="hs-special">)</span><span>
+</span><span id="line-45"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.TypeFamilyWrappers</span></span><span>
+</span><span id="line-46"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Ouroboros.Consensus.Util.Condense</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Condense</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-47"></span><span>
+</span><span id="line-48"></span><span>
+</span><span id="line-49"></span><span class="hs-comment">--</span><span>
+</span><span id="line-50"></span><span class="hs-comment">-- instances for Header HardForkBlock</span><span>
+</span><span id="line-51"></span><span class="hs-comment">--</span><span>
+</span><span id="line-52"></span><span>
+</span><span id="line-53"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640821"><span id="local-6989586621679640823"><span id="local-6989586621679641086"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Header</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679641086"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Header</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkBlock</span></span><span> </span><span class="annot"><a href="#local-6989586621679641086"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-54"></span><span>    </span><span id="local-6989586621679640813"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; Header (HardForkBlock xs) -&gt; Object
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></span></span><span> </span><span id="local-6989586621679640811"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640811"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-55"></span><span>          </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-56"></span><span>        </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Header</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640811"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-57"></span><span>        </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). OneEraHeader xs -&gt; NS Header xs
+</span><span class="hs-identifier hs-var">getOneEraHeader</span></span><span>
+</span><span id="line-58"></span><span>        </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). Header (HardForkBlock xs) -&gt; OneEraHeader xs
+</span><span class="hs-identifier hs-var">getHardForkHeader</span></span><span>
+</span><span id="line-59"></span><span>
+</span><span id="line-60"></span><span>
+</span><span id="line-61"></span><span class="hs-comment">--</span><span>
+</span><span id="line-62"></span><span class="hs-comment">-- instances for GenTx HardForkBlock</span><span>
+</span><span id="line-63"></span><span class="hs-comment">--</span><span>
+</span><span id="line-64"></span><span>
+</span><span id="line-65"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640795"><span id="local-6989586621679640797"><span id="local-6989586621679641040"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Compose</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">GenTx</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679641040"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">GenTx</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkBlock</span></span><span> </span><span class="annot"><a href="#local-6989586621679641040"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-66"></span><span>    </span><span id="local-6989586621679640790"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; GenTx (HardForkBlock xs) -&gt; Object
+</span><a href="#local-6989586621679640790"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640789"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640789"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-67"></span><span>          </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-68"></span><span>        </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">GenTx</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640789"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-69"></span><span>        </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). OneEraGenTx xs -&gt; NS GenTx xs
+</span><span class="hs-identifier hs-var">getOneEraGenTx</span></span><span>
+</span><span id="line-70"></span><span>        </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). GenTx (HardForkBlock xs) -&gt; OneEraGenTx xs
+</span><span class="hs-identifier hs-var">getHardForkGenTx</span></span><span>
+</span><span id="line-71"></span><span>
+</span><span id="line-72"></span><span>
+</span><span id="line-73"></span><span class="hs-comment">--</span><span>
+</span><span id="line-74"></span><span class="hs-comment">-- instances for HardForkApplyTxErr</span><span>
+</span><span id="line-75"></span><span class="hs-comment">--</span><span>
+</span><span id="line-76"></span><span>
+</span><span id="line-77"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640779"><span id="local-6989586621679640781"><span id="local-6989586621679641035"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapApplyTxErr</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679641035"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkApplyTxErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679641035"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-78"></span><span>    </span><span id="local-6989586621679640758"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; HardForkApplyTxErr xs -&gt; Object
+</span><a href="#local-6989586621679640758"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640757"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640757"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkApplyTxErrFromEra</span></span><span> </span><span id="local-6989586621679640755"><span class="annot"><span class="annottext">OneEraApplyTxErr xs
+</span><a href="#local-6989586621679640755"><span class="hs-identifier hs-var">err</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640757"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">OneEraApplyTxErr xs
+</span><a href="#local-6989586621679640755"><span class="hs-identifier hs-var">err</span></a></span><span>
+</span><span id="line-79"></span><span>    </span><span class="annot"><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span id="local-6989586621679640754"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640754"><span class="hs-identifier hs-var">_dtal</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkApplyTxErrWrongEra</span></span><span> </span><span id="local-6989586621679640752"><span class="annot"><span class="annottext">MismatchEraInfo xs
+</span><a href="#local-6989586621679640752"><span class="hs-identifier hs-var">mismatch</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-80"></span><span>      </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-81"></span><span>        </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>       </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkApplyTxErrWrongEra&quot;</span></span><span>
+</span><span id="line-82"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;currentEra&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679640749"><span class="hs-identifier hs-var">ledgerEraName</span></a></span><span>
+</span><span id="line-83"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;txEra&quot;</span></span><span>      </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679640748"><span class="hs-identifier hs-var">otherEraName</span></a></span><span>
+</span><span id="line-84"></span><span>        </span><span class="hs-special">]</span><span>
+</span><span id="line-85"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-86"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">EraMismatch</span></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679640749"><span class="annot"><span class="annottext">Text
+ledgerEraName :: EraMismatch -&gt; Text
+ledgerEraName :: Text
+</span><span class="hs-identifier hs-var hs-var">ledgerEraName</span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679640748"><span class="annot"><span class="annottext">Text
+otherEraName :: EraMismatch -&gt; Text
+otherEraName :: Text
+</span><span class="hs-identifier hs-var hs-var">otherEraName</span></span></span><span class="hs-special">}</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). SListI xs =&gt; MismatchEraInfo xs -&gt; EraMismatch
+</span><span class="hs-identifier hs-var">mkEraMismatch</span></span><span> </span><span class="annot"><span class="annottext">MismatchEraInfo xs
+</span><a href="#local-6989586621679640752"><span class="hs-identifier hs-var">mismatch</span></a></span><span>
+</span><span id="line-87"></span><span>
+</span><span id="line-88"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640740"><span id="local-6989586621679640742"><span id="local-6989586621679641027"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapApplyTxErr</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679641027"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraApplyTxErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679641027"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-89"></span><span>    </span><span id="local-6989586621679640735"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraApplyTxErr xs -&gt; Object
+</span><a href="#local-6989586621679640735"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640734"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640734"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-90"></span><span>        </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-91"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapApplyTxErr</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640734"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-92"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). OneEraApplyTxErr xs -&gt; NS WrapApplyTxErr xs
+</span><span class="hs-identifier hs-var">getOneEraApplyTxErr</span></span><span>
+</span><span id="line-93"></span><span>
+</span><span id="line-94"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640725"><span id="local-6989586621679640727"><span id="local-6989586621679641018"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">ApplyTxErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679641018"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapApplyTxErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679641018"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-95"></span><span>    </span><span id="local-6989586621679640723"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapApplyTxErr blk -&gt; Object
+</span><a href="#local-6989586621679640723"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640722"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640722"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640722"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk. WrapApplyTxErr blk -&gt; ApplyTxErr blk
+</span><span class="hs-identifier hs-var">unwrapApplyTxErr</span></span><span>
+</span><span id="line-96"></span><span>
+</span><span id="line-97"></span><span>
+</span><span id="line-98"></span><span class="hs-comment">--</span><span>
+</span><span id="line-99"></span><span class="hs-comment">-- instances for HardForkLedgerError</span><span>
+</span><span id="line-100"></span><span class="hs-comment">--</span><span>
+</span><span id="line-101"></span><span>
+</span><span id="line-102"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640716"><span id="local-6989586621679640718"><span id="local-6989586621679641016"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerErr</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679641016"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkLedgerError</span></span><span> </span><span class="annot"><a href="#local-6989586621679641016"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-103"></span><span>    </span><span id="local-6989586621679640701"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; HardForkLedgerError xs -&gt; Object
+</span><a href="#local-6989586621679640701"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640700"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640700"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkLedgerErrorFromEra</span></span><span> </span><span id="local-6989586621679640698"><span class="annot"><span class="annottext">OneEraLedgerError xs
+</span><a href="#local-6989586621679640698"><span class="hs-identifier hs-var">err</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640700"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">OneEraLedgerError xs
+</span><a href="#local-6989586621679640698"><span class="hs-identifier hs-var">err</span></a></span><span>
+</span><span id="line-104"></span><span>
+</span><span id="line-105"></span><span>    </span><span class="annot"><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span id="local-6989586621679640697"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640697"><span class="hs-identifier hs-var">_dtal</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkLedgerErrorWrongEra</span></span><span> </span><span id="local-6989586621679640695"><span class="annot"><span class="annottext">MismatchEraInfo xs
+</span><a href="#local-6989586621679640695"><span class="hs-identifier hs-var">mismatch</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-106"></span><span>      </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-107"></span><span>        </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>       </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkLedgerErrorWrongEra&quot;</span></span><span>
+</span><span id="line-108"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;currentEra&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679640694"><span class="hs-identifier hs-var">ledgerEraName</span></a></span><span>
+</span><span id="line-109"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;blockEra&quot;</span></span><span>   </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679640693"><span class="hs-identifier hs-var">otherEraName</span></a></span><span>
+</span><span id="line-110"></span><span>        </span><span class="hs-special">]</span><span>
+</span><span id="line-111"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-112"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">EraMismatch</span></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679640694"><span class="annot"><span class="annottext">Text
+ledgerEraName :: Text
+ledgerEraName :: EraMismatch -&gt; Text
+</span><a href="#local-6989586621679640694"><span class="hs-identifier hs-var hs-var">ledgerEraName</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679640693"><span class="annot"><span class="annottext">Text
+otherEraName :: Text
+otherEraName :: EraMismatch -&gt; Text
+</span><a href="#local-6989586621679640693"><span class="hs-identifier hs-var hs-var">otherEraName</span></a></span></span><span class="hs-special">}</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). SListI xs =&gt; MismatchEraInfo xs -&gt; EraMismatch
+</span><span class="hs-identifier hs-var">mkEraMismatch</span></span><span> </span><span class="annot"><span class="annottext">MismatchEraInfo xs
+</span><a href="#local-6989586621679640695"><span class="hs-identifier hs-var">mismatch</span></a></span><span>
+</span><span id="line-113"></span><span>
+</span><span id="line-114"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640688"><span id="local-6989586621679640690"><span id="local-6989586621679641015"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerErr</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679641015"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraLedgerError</span></span><span> </span><span class="annot"><a href="#local-6989586621679641015"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-115"></span><span>    </span><span id="local-6989586621679640683"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraLedgerError xs -&gt; Object
+</span><a href="#local-6989586621679640683"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640682"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640682"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-116"></span><span>        </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-117"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerErr</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640682"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-118"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). OneEraLedgerError xs -&gt; NS WrapLedgerErr xs
+</span><span class="hs-identifier hs-var">getOneEraLedgerError</span></span><span>
+</span><span id="line-119"></span><span>
+</span><span id="line-120"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640673"><span id="local-6989586621679640675"><span id="local-6989586621679641012"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LedgerError</span></span><span> </span><span class="annot"><a href="#local-6989586621679641012"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679641012"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-121"></span><span>    </span><span id="local-6989586621679640671"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapLedgerErr blk -&gt; Object
+</span><a href="#local-6989586621679640671"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640670"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640670"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640670"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk. WrapLedgerErr blk -&gt; LedgerError blk
+</span><span class="hs-identifier hs-var">unwrapLedgerErr</span></span><span>
+</span><span id="line-122"></span><span>
+</span><span id="line-123"></span><span>
+</span><span id="line-124"></span><span class="hs-comment">--</span><span>
+</span><span id="line-125"></span><span class="hs-comment">-- instances for HardForkLedgerWarning</span><span>
+</span><span id="line-126"></span><span class="hs-comment">--</span><span>
+</span><span id="line-127"></span><span>
+</span><span id="line-128"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640664"><span id="local-6989586621679640666"><span id="local-6989586621679641010"><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerWarning</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679641010"><span class="hs-identifier hs-type">xs</span></a></span><span>
+</span><span id="line-129"></span><span>         </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">SingleEraBlock</span></span><span> </span><span class="annot"><a href="#local-6989586621679641010"><span class="hs-identifier hs-type">xs</span></a></span><span>
+</span><span id="line-130"></span><span>         </span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkLedgerWarning</span></span><span> </span><span class="annot"><a href="#local-6989586621679641010"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-131"></span><span>    </span><span id="local-6989586621679640599"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; HardForkLedgerWarning xs -&gt; Object
+</span><a href="#local-6989586621679640599"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640598"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640598"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span id="local-6989586621679640597"><span class="annot"><span class="annottext">HardForkLedgerWarning xs
+</span><a href="#local-6989586621679640597"><span class="hs-identifier hs-var">warning</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">HardForkLedgerWarning xs
+</span><a href="#local-6989586621679640597"><span class="hs-identifier hs-var">warning</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-132"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkWarningInEra</span></span><span> </span><span id="local-6989586621679640595"><span class="annot"><span class="annottext">OneEraLedgerWarning xs
+</span><a href="#local-6989586621679640595"><span class="hs-identifier hs-var">err</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640598"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">OneEraLedgerWarning xs
+</span><a href="#local-6989586621679640595"><span class="hs-identifier hs-var">err</span></a></span><span>
+</span><span id="line-133"></span><span>
+</span><span id="line-134"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkWarningTransitionMismatch</span></span><span> </span><span id="local-6989586621679640593"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640593"><span class="hs-identifier hs-var">toEra</span></a></span></span><span> </span><span id="local-6989586621679640592"><span class="annot"><span class="annottext">EraParams
+</span><a href="#local-6989586621679640592"><span class="hs-identifier hs-var">eraParams</span></a></span></span><span> </span><span id="local-6989586621679640591"><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640591"><span class="hs-identifier hs-var">epoch</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-135"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-136"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>            </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkWarningTransitionMismatch&quot;</span></span><span>
+</span><span id="line-137"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;toEra&quot;</span></span><span>           </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640593"><span class="hs-identifier hs-var">toEra</span></a></span><span>
+</span><span id="line-138"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;eraParams&quot;</span></span><span>       </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640598"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">EraParams
+</span><a href="#local-6989586621679640592"><span class="hs-identifier hs-var">eraParams</span></a></span><span>
+</span><span id="line-139"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;transitionEpoch&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640591"><span class="hs-identifier hs-var">epoch</span></a></span><span>
+</span><span id="line-140"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-141"></span><span>
+</span><span id="line-142"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkWarningTransitionInFinalEra</span></span><span> </span><span id="local-6989586621679640588"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640588"><span class="hs-identifier hs-var">fromEra</span></a></span></span><span> </span><span id="local-6989586621679640587"><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640587"><span class="hs-identifier hs-var">epoch</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-143"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-144"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>            </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkWarningTransitionInFinalEra&quot;</span></span><span>
+</span><span id="line-145"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;fromEra&quot;</span></span><span>         </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640588"><span class="hs-identifier hs-var">fromEra</span></a></span><span>
+</span><span id="line-146"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;transitionEpoch&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640587"><span class="hs-identifier hs-var">epoch</span></a></span><span>
+</span><span id="line-147"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-148"></span><span>
+</span><span id="line-149"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkWarningTransitionUnconfirmed</span></span><span> </span><span id="local-6989586621679640585"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640585"><span class="hs-identifier hs-var">toEra</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-150"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-151"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>  </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkWarningTransitionUnconfirmed&quot;</span></span><span>
+</span><span id="line-152"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;toEra&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640585"><span class="hs-identifier hs-var">toEra</span></a></span><span>
+</span><span id="line-153"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-154"></span><span>
+</span><span id="line-155"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkWarningTransitionReconfirmed</span></span><span> </span><span id="local-6989586621679640583"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640583"><span class="hs-identifier hs-var">fromEra</span></a></span></span><span> </span><span id="local-6989586621679640582"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640582"><span class="hs-identifier hs-var">toEra</span></a></span></span><span> </span><span id="local-6989586621679640581"><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640581"><span class="hs-identifier hs-var">prevEpoch</span></a></span></span><span> </span><span id="local-6989586621679640580"><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640580"><span class="hs-identifier hs-var">newEpoch</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-156"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-157"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>                </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkWarningTransitionReconfirmed&quot;</span></span><span>
+</span><span id="line-158"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;fromEra&quot;</span></span><span>             </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640583"><span class="hs-identifier hs-var">fromEra</span></a></span><span>
+</span><span id="line-159"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;toEra&quot;</span></span><span>               </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640582"><span class="hs-identifier hs-var">toEra</span></a></span><span>
+</span><span id="line-160"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;prevTransitionEpoch&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640581"><span class="hs-identifier hs-var">prevEpoch</span></a></span><span>
+</span><span id="line-161"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;newTransitionEpoch&quot;</span></span><span>  </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640580"><span class="hs-identifier hs-var">newEpoch</span></a></span><span>
+</span><span id="line-162"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-163"></span><span>
+</span><span id="line-164"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640575"><span id="local-6989586621679640577"><span id="local-6989586621679641003"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerWarning</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679641003"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraLedgerWarning</span></span><span> </span><span class="annot"><a href="#local-6989586621679641003"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-165"></span><span>    </span><span id="local-6989586621679640570"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraLedgerWarning xs -&gt; Object
+</span><a href="#local-6989586621679640570"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640569"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640569"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-166"></span><span>        </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-167"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerWarning</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640569"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-168"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]).
+OneEraLedgerWarning xs -&gt; NS WrapLedgerWarning xs
+</span><span class="hs-identifier hs-var">getOneEraLedgerWarning</span></span><span>
+</span><span id="line-169"></span><span>
+</span><span id="line-170"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640560"><span id="local-6989586621679640562"><span id="local-6989586621679640999"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LedgerWarning</span></span><span> </span><span class="annot"><a href="#local-6989586621679640999"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerWarning</span></span><span> </span><span class="annot"><a href="#local-6989586621679640999"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-171"></span><span>    </span><span id="local-6989586621679640558"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapLedgerWarning blk -&gt; Object
+</span><a href="#local-6989586621679640558"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640557"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640557"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640557"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk. WrapLedgerWarning blk -&gt; LedgerWarning blk
+</span><span class="hs-identifier hs-var">unwrapLedgerWarning</span></span><span>
+</span><span id="line-172"></span><span>
+</span><span id="line-173"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640551"><span id="local-6989586621679640553"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">EraParams</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-174"></span><span>    </span><span id="local-6989586621679640536"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; EraParams -&gt; Object
+</span><a href="#local-6989586621679640536"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640535"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640535"><span class="hs-identifier hs-var">_dtal</span></a></span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">EraParams</span></span><span class="hs-special">{</span><span> </span><span id="local-6989586621679640534"><span class="annot"><span class="annottext">EpochSize
+eraEpochSize :: EpochSize
+eraEpochSize :: EraParams -&gt; EpochSize
+</span><a href="#local-6989586621679640534"><span class="hs-identifier hs-var hs-var">eraEpochSize</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679640533"><span class="annot"><span class="annottext">SlotLength
+eraSlotLength :: SlotLength
+eraSlotLength :: EraParams -&gt; SlotLength
+</span><a href="#local-6989586621679640533"><span class="hs-identifier hs-var hs-var">eraSlotLength</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679640532"><span class="annot"><span class="annottext">SafeZone
+eraSafeZone :: SafeZone
+eraSafeZone :: EraParams -&gt; SafeZone
+</span><a href="#local-6989586621679640532"><span class="hs-identifier hs-var hs-var">eraSafeZone</span></a></span></span><span class="hs-special">}</span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-175"></span><span>      </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-176"></span><span>        </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;epochSize&quot;</span></span><span>  </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">EpochSize -&gt; Word64
+</span><span class="hs-identifier hs-var">unEpochSize</span></span><span> </span><span class="annot"><span class="annottext">EpochSize
+</span><a href="#local-6989586621679640534"><span class="hs-identifier hs-var">eraEpochSize</span></a></span><span>
+</span><span id="line-177"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;slotLength&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">SlotLength -&gt; NominalDiffTime
+</span><span class="hs-identifier hs-var">getSlotLength</span></span><span> </span><span class="annot"><span class="annottext">SlotLength
+</span><a href="#local-6989586621679640533"><span class="hs-identifier hs-var">eraSlotLength</span></a></span><span>
+</span><span id="line-178"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;safeZone&quot;</span></span><span>   </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">SafeZone
+</span><a href="#local-6989586621679640532"><span class="hs-identifier hs-var">eraSafeZone</span></a></span><span>
+</span><span id="line-179"></span><span>        </span><span class="hs-special">]</span><span>
+</span><span id="line-180"></span><span>
+</span><span id="line-181"></span><span class="hs-comment">-- deriving instance ToJSON SafeZone</span><span>
+</span><span id="line-182"></span><span>
+</span><span id="line-183"></span><span>
+</span><span id="line-184"></span><span class="hs-comment">--</span><span>
+</span><span id="line-185"></span><span class="hs-comment">-- instances for HardForkLedgerUpdate</span><span>
+</span><span id="line-186"></span><span class="hs-comment">--</span><span>
+</span><span id="line-187"></span><span>
+</span><span id="line-188"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640526"><span id="local-6989586621679640528"><span id="local-6989586621679640993"><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerUpdate</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640993"><span class="hs-identifier hs-type">xs</span></a></span><span>
+</span><span id="line-189"></span><span>         </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">SingleEraBlock</span></span><span> </span><span class="annot"><a href="#local-6989586621679640993"><span class="hs-identifier hs-type">xs</span></a></span><span>
+</span><span id="line-190"></span><span>         </span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkLedgerUpdate</span></span><span> </span><span class="annot"><a href="#local-6989586621679640993"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-191"></span><span>    </span><span id="local-6989586621679640477"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; HardForkLedgerUpdate xs -&gt; Object
+</span><a href="#local-6989586621679640477"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640476"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640476"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span id="local-6989586621679640475"><span class="annot"><span class="annottext">HardForkLedgerUpdate xs
+</span><a href="#local-6989586621679640475"><span class="hs-identifier hs-var">update</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">HardForkLedgerUpdate xs
+</span><a href="#local-6989586621679640475"><span class="hs-identifier hs-var">update</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-192"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkUpdateInEra</span></span><span> </span><span id="local-6989586621679640473"><span class="annot"><span class="annottext">OneEraLedgerUpdate xs
+</span><a href="#local-6989586621679640473"><span class="hs-identifier hs-var">err</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640476"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">OneEraLedgerUpdate xs
+</span><a href="#local-6989586621679640473"><span class="hs-identifier hs-var">err</span></a></span><span>
+</span><span id="line-193"></span><span>
+</span><span id="line-194"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkUpdateTransitionConfirmed</span></span><span> </span><span id="local-6989586621679640471"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640471"><span class="hs-identifier hs-var">fromEra</span></a></span></span><span> </span><span id="local-6989586621679640470"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640470"><span class="hs-identifier hs-var">toEra</span></a></span></span><span> </span><span id="local-6989586621679640469"><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640469"><span class="hs-identifier hs-var">epoch</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-195"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-196"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>            </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkUpdateTransitionConfirmed&quot;</span></span><span>
+</span><span id="line-197"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;fromEra&quot;</span></span><span>         </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640471"><span class="hs-identifier hs-var">fromEra</span></a></span><span>
+</span><span id="line-198"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;toEra&quot;</span></span><span>           </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640470"><span class="hs-identifier hs-var">toEra</span></a></span><span>
+</span><span id="line-199"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;transitionEpoch&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640469"><span class="hs-identifier hs-var">epoch</span></a></span><span>
+</span><span id="line-200"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-201"></span><span>
+</span><span id="line-202"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkUpdateTransitionDone</span></span><span> </span><span id="local-6989586621679640467"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640467"><span class="hs-identifier hs-var">fromEra</span></a></span></span><span> </span><span id="local-6989586621679640466"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640466"><span class="hs-identifier hs-var">toEra</span></a></span></span><span> </span><span id="local-6989586621679640465"><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640465"><span class="hs-identifier hs-var">epoch</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-203"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-204"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>            </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkUpdateTransitionDone&quot;</span></span><span>
+</span><span id="line-205"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;fromEra&quot;</span></span><span>         </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640467"><span class="hs-identifier hs-var">fromEra</span></a></span><span>
+</span><span id="line-206"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;toEra&quot;</span></span><span>           </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640466"><span class="hs-identifier hs-var">toEra</span></a></span><span>
+</span><span id="line-207"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;transitionEpoch&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">EpochNo
+</span><a href="#local-6989586621679640465"><span class="hs-identifier hs-var">epoch</span></a></span><span>
+</span><span id="line-208"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-209"></span><span>
+</span><span id="line-210"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">HardForkUpdateTransitionRolledBack</span></span><span> </span><span id="local-6989586621679640463"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640463"><span class="hs-identifier hs-var">fromEra</span></a></span></span><span> </span><span id="local-6989586621679640462"><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640462"><span class="hs-identifier hs-var">toEra</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-211"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-212"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>    </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkUpdateTransitionRolledBack&quot;</span></span><span>
+</span><span id="line-213"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;fromEra&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640463"><span class="hs-identifier hs-var">fromEra</span></a></span><span>
+</span><span id="line-214"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;toEra&quot;</span></span><span>   </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. Condense a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">condense</span></span><span> </span><span class="annot"><span class="annottext">EraIndex xs
+</span><a href="#local-6989586621679640462"><span class="hs-identifier hs-var">toEra</span></a></span><span>
+</span><span id="line-215"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-216"></span><span>
+</span><span id="line-217"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640457"><span id="local-6989586621679640459"><span id="local-6989586621679640992"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerUpdate</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640992"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraLedgerUpdate</span></span><span> </span><span class="annot"><a href="#local-6989586621679640992"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-218"></span><span>    </span><span id="local-6989586621679640452"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraLedgerUpdate xs -&gt; Object
+</span><a href="#local-6989586621679640452"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640451"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640451"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-219"></span><span>        </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-220"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerUpdate</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640451"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-221"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). OneEraLedgerUpdate xs -&gt; NS WrapLedgerUpdate xs
+</span><span class="hs-identifier hs-var">getOneEraLedgerUpdate</span></span><span>
+</span><span id="line-222"></span><span>
+</span><span id="line-223"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640442"><span id="local-6989586621679640444"><span id="local-6989586621679640989"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LedgerUpdate</span></span><span> </span><span class="annot"><a href="#local-6989586621679640989"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapLedgerUpdate</span></span><span> </span><span class="annot"><a href="#local-6989586621679640989"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-224"></span><span>    </span><span id="local-6989586621679640440"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapLedgerUpdate blk -&gt; Object
+</span><a href="#local-6989586621679640440"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640439"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640439"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640439"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk. WrapLedgerUpdate blk -&gt; LedgerUpdate blk
+</span><span class="hs-identifier hs-var">unwrapLedgerUpdate</span></span><span>
+</span><span id="line-225"></span><span>
+</span><span id="line-226"></span><span>
+</span><span id="line-227"></span><span class="hs-comment">--</span><span>
+</span><span id="line-228"></span><span class="hs-comment">-- instances for HardForkEnvelopeErr</span><span>
+</span><span id="line-229"></span><span class="hs-comment">--</span><span>
+</span><span id="line-230"></span><span>
+</span><span id="line-231"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640433"><span id="local-6989586621679640435"><span id="local-6989586621679640987"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapEnvelopeErr</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640987"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkEnvelopeErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679640987"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-232"></span><span>    </span><span id="local-6989586621679640418"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; HardForkEnvelopeErr xs -&gt; Object
+</span><a href="#local-6989586621679640418"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640417"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640417"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkEnvelopeErrFromEra</span></span><span> </span><span id="local-6989586621679640415"><span class="annot"><span class="annottext">OneEraEnvelopeErr xs
+</span><a href="#local-6989586621679640415"><span class="hs-identifier hs-var">err</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640417"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">OneEraEnvelopeErr xs
+</span><a href="#local-6989586621679640415"><span class="hs-identifier hs-var">err</span></a></span><span>
+</span><span id="line-233"></span><span>
+</span><span id="line-234"></span><span>    </span><span class="annot"><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span id="local-6989586621679640414"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640414"><span class="hs-identifier hs-var">_dtal</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkEnvelopeErrWrongEra</span></span><span> </span><span id="local-6989586621679640412"><span class="annot"><span class="annottext">MismatchEraInfo xs
+</span><a href="#local-6989586621679640412"><span class="hs-identifier hs-var">mismatch</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-235"></span><span>      </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-236"></span><span>        </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>       </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkEnvelopeErrWrongEra&quot;</span></span><span>
+</span><span id="line-237"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;currentEra&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679640411"><span class="hs-identifier hs-var">ledgerEraName</span></a></span><span>
+</span><span id="line-238"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;blockEra&quot;</span></span><span>   </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679640410"><span class="hs-identifier hs-var">otherEraName</span></a></span><span>
+</span><span id="line-239"></span><span>        </span><span class="hs-special">]</span><span>
+</span><span id="line-240"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-241"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">EraMismatch</span></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679640411"><span class="annot"><span class="annottext">Text
+ledgerEraName :: Text
+ledgerEraName :: EraMismatch -&gt; Text
+</span><a href="#local-6989586621679640411"><span class="hs-identifier hs-var hs-var">ledgerEraName</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679640410"><span class="annot"><span class="annottext">Text
+otherEraName :: Text
+otherEraName :: EraMismatch -&gt; Text
+</span><a href="#local-6989586621679640410"><span class="hs-identifier hs-var hs-var">otherEraName</span></a></span></span><span class="hs-special">}</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). SListI xs =&gt; MismatchEraInfo xs -&gt; EraMismatch
+</span><span class="hs-identifier hs-var">mkEraMismatch</span></span><span> </span><span class="annot"><span class="annottext">MismatchEraInfo xs
+</span><a href="#local-6989586621679640412"><span class="hs-identifier hs-var">mismatch</span></a></span><span>
+</span><span id="line-242"></span><span>
+</span><span id="line-243"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640405"><span id="local-6989586621679640407"><span id="local-6989586621679640986"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapEnvelopeErr</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640986"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraEnvelopeErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679640986"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-244"></span><span>    </span><span id="local-6989586621679640400"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraEnvelopeErr xs -&gt; Object
+</span><a href="#local-6989586621679640400"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640399"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640399"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-245"></span><span>        </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-246"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapEnvelopeErr</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640399"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-247"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). OneEraEnvelopeErr xs -&gt; NS WrapEnvelopeErr xs
+</span><span class="hs-identifier hs-var">getOneEraEnvelopeErr</span></span><span>
+</span><span id="line-248"></span><span>
+</span><span id="line-249"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640390"><span id="local-6989586621679640392"><span id="local-6989586621679640983"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OtherHeaderEnvelopeError</span></span><span> </span><span class="annot"><a href="#local-6989586621679640983"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapEnvelopeErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679640983"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-250"></span><span>    </span><span id="local-6989586621679640388"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapEnvelopeErr blk -&gt; Object
+</span><a href="#local-6989586621679640388"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640387"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640387"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640387"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk. WrapEnvelopeErr blk -&gt; OtherHeaderEnvelopeError blk
+</span><span class="hs-identifier hs-var">unwrapEnvelopeErr</span></span><span>
+</span><span id="line-251"></span><span>
+</span><span id="line-252"></span><span>
+</span><span id="line-253"></span><span class="hs-comment">--</span><span>
+</span><span id="line-254"></span><span class="hs-comment">-- instances for HardForkValidationErr</span><span>
+</span><span id="line-255"></span><span class="hs-comment">--</span><span>
+</span><span id="line-256"></span><span>
+</span><span id="line-257"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640381"><span id="local-6989586621679640383"><span id="local-6989586621679640981"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapValidationErr</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640981"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkValidationErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679640981"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-258"></span><span>    </span><span id="local-6989586621679640366"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; HardForkValidationErr xs -&gt; Object
+</span><a href="#local-6989586621679640366"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640365"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640365"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkValidationErrFromEra</span></span><span> </span><span id="local-6989586621679640363"><span class="annot"><span class="annottext">OneEraValidationErr xs
+</span><a href="#local-6989586621679640363"><span class="hs-identifier hs-var">err</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640365"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">OneEraValidationErr xs
+</span><a href="#local-6989586621679640363"><span class="hs-identifier hs-var">err</span></a></span><span>
+</span><span id="line-259"></span><span>
+</span><span id="line-260"></span><span>    </span><span class="annot"><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span id="local-6989586621679640362"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640362"><span class="hs-identifier hs-var">_dtal</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HardForkValidationErrWrongEra</span></span><span> </span><span id="local-6989586621679640360"><span class="annot"><span class="annottext">MismatchEraInfo xs
+</span><a href="#local-6989586621679640360"><span class="hs-identifier hs-var">mismatch</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-261"></span><span>      </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-262"></span><span>        </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span>       </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkValidationErrWrongEra&quot;</span></span><span>
+</span><span id="line-263"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;currentEra&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679640359"><span class="hs-identifier hs-var">ledgerEraName</span></a></span><span>
+</span><span id="line-264"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;blockEra&quot;</span></span><span>   </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679640358"><span class="hs-identifier hs-var">otherEraName</span></a></span><span>
+</span><span id="line-265"></span><span>        </span><span class="hs-special">]</span><span>
+</span><span id="line-266"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-267"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">EraMismatch</span></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679640359"><span class="annot"><span class="annottext">Text
+ledgerEraName :: Text
+ledgerEraName :: EraMismatch -&gt; Text
+</span><a href="#local-6989586621679640359"><span class="hs-identifier hs-var hs-var">ledgerEraName</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679640358"><span class="annot"><span class="annottext">Text
+otherEraName :: Text
+otherEraName :: EraMismatch -&gt; Text
+</span><a href="#local-6989586621679640358"><span class="hs-identifier hs-var hs-var">otherEraName</span></a></span></span><span class="hs-special">}</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). SListI xs =&gt; MismatchEraInfo xs -&gt; EraMismatch
+</span><span class="hs-identifier hs-var">mkEraMismatch</span></span><span> </span><span class="annot"><span class="annottext">MismatchEraInfo xs
+</span><a href="#local-6989586621679640360"><span class="hs-identifier hs-var">mismatch</span></a></span><span>
+</span><span id="line-268"></span><span>
+</span><span id="line-269"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640353"><span id="local-6989586621679640355"><span id="local-6989586621679640980"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapValidationErr</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640980"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraValidationErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679640980"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-270"></span><span>    </span><span id="local-6989586621679640348"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraValidationErr xs -&gt; Object
+</span><a href="#local-6989586621679640348"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640347"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640347"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-271"></span><span>        </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-272"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapValidationErr</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640347"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-273"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]).
+OneEraValidationErr xs -&gt; NS WrapValidationErr xs
+</span><span class="hs-identifier hs-var">getOneEraValidationErr</span></span><span>
+</span><span id="line-274"></span><span>
+</span><span id="line-275"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640338"><span id="local-6989586621679640340"><span id="local-6989586621679640977"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">ValidationErr</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">BlockProtocol</span></span><span> </span><span class="annot"><a href="#local-6989586621679640977"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapValidationErr</span></span><span> </span><span class="annot"><a href="#local-6989586621679640977"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-276"></span><span>    </span><span id="local-6989586621679640336"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapValidationErr blk -&gt; Object
+</span><a href="#local-6989586621679640336"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640335"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640335"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640335"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk.
+WrapValidationErr blk -&gt; ValidationErr (BlockProtocol blk)
+</span><span class="hs-identifier hs-var">unwrapValidationErr</span></span><span>
+</span><span id="line-277"></span><span>
+</span><span id="line-278"></span><span>
+</span><span id="line-279"></span><span class="hs-comment">--</span><span>
+</span><span id="line-280"></span><span class="hs-comment">-- instances for HardForkCannotForge</span><span>
+</span><span id="line-281"></span><span class="hs-comment">--</span><span>
+</span><span id="line-282"></span><span>
+</span><span id="line-283"></span><span class="hs-comment">-- It's a type alias:</span><span>
+</span><span id="line-284"></span><span class="hs-comment">-- type HardForkCannotForge xs = OneEraCannotForge xs</span><span>
+</span><span id="line-285"></span><span>
+</span><span id="line-286"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640329"><span id="local-6989586621679640331"><span id="local-6989586621679640975"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapCannotForge</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640975"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraCannotForge</span></span><span> </span><span class="annot"><a href="#local-6989586621679640975"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-287"></span><span>    </span><span id="local-6989586621679640324"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraCannotForge xs -&gt; Object
+</span><a href="#local-6989586621679640324"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640323"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640323"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-288"></span><span>        </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-289"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapCannotForge</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-290"></span><span>              </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640323"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-291"></span><span>      </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]). OneEraCannotForge xs -&gt; NS WrapCannotForge xs
+</span><span class="hs-identifier hs-var">getOneEraCannotForge</span></span><span>
+</span><span id="line-292"></span><span>
+</span><span id="line-293"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640314"><span id="local-6989586621679640316"><span id="local-6989586621679640972"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">CannotForge</span></span><span> </span><span class="annot"><a href="#local-6989586621679640972"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapCannotForge</span></span><span> </span><span class="annot"><a href="#local-6989586621679640972"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-294"></span><span>    </span><span id="local-6989586621679640312"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapCannotForge blk -&gt; Object
+</span><a href="#local-6989586621679640312"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640311"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640311"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640311"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk. WrapCannotForge blk -&gt; CannotForge blk
+</span><span class="hs-identifier hs-var">unwrapCannotForge</span></span><span>
+</span><span id="line-295"></span><span>
+</span><span id="line-296"></span><span>
+</span><span id="line-297"></span><span class="hs-comment">--</span><span>
+</span><span id="line-298"></span><span class="hs-comment">-- instances for HardForkForgeStateInfo</span><span>
+</span><span id="line-299"></span><span class="hs-comment">--</span><span>
+</span><span id="line-300"></span><span>
+</span><span id="line-301"></span><span class="hs-comment">-- It's a type alias:</span><span>
+</span><span id="line-302"></span><span class="hs-comment">-- type HardForkForgeStateInfo xs = OneEraForgeStateInfo xs</span><span>
+</span><span id="line-303"></span><span>
+</span><span id="line-304"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640305"><span id="local-6989586621679640307"><span id="local-6989586621679640970"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapForgeStateInfo</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640970"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraForgeStateInfo</span></span><span> </span><span class="annot"><a href="#local-6989586621679640970"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-305"></span><span>    </span><span id="local-6989586621679640290"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraForgeStateInfo xs -&gt; Object
+</span><a href="#local-6989586621679640290"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640289"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640289"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span id="local-6989586621679640288"><span class="annot"><span class="annottext">OneEraForgeStateInfo xs
+</span><a href="#local-6989586621679640288"><span class="hs-identifier hs-var">forgeStateInfo</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-306"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-307"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkForgeStateInfo&quot;</span></span><span>
+</span><span id="line-308"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;forgeStateInfo&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Object
+</span><a href="#local-6989586621679640286"><span class="hs-identifier hs-var">forgeStateInfo'</span></a></span><span>
+</span><span id="line-309"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-310"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-311"></span><span>        </span><span class="annot"><a href="#local-6989586621679640286"><span class="hs-identifier hs-type">forgeStateInfo'</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Object</span></span><span>
+</span><span id="line-312"></span><span>        </span><span id="local-6989586621679640286"><span class="annot"><span class="annottext">forgeStateInfo' :: Object
+</span><a href="#local-6989586621679640286"><span class="hs-identifier hs-var hs-var">forgeStateInfo'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-313"></span><span>              </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-314"></span><span>            </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapForgeStateInfo</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-315"></span><span>                    </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640289"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-316"></span><span>            </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]).
+OneEraForgeStateInfo xs -&gt; NS WrapForgeStateInfo xs
+</span><span class="hs-identifier hs-var">getOneEraForgeStateInfo</span></span><span>
+</span><span id="line-317"></span><span>            </span><span class="annot"><span class="annottext">forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="annot"><span class="annottext">OneEraForgeStateInfo xs
+</span><a href="#local-6989586621679640288"><span class="hs-identifier hs-var">forgeStateInfo</span></a></span><span>
+</span><span id="line-318"></span><span>
+</span><span id="line-319"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640277"><span id="local-6989586621679640279"><span id="local-6989586621679640963"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">ForgeStateInfo</span></span><span> </span><span class="annot"><a href="#local-6989586621679640963"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapForgeStateInfo</span></span><span> </span><span class="annot"><a href="#local-6989586621679640963"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-320"></span><span>    </span><span id="local-6989586621679640275"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapForgeStateInfo blk -&gt; Object
+</span><a href="#local-6989586621679640275"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640274"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640274"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640274"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk. WrapForgeStateInfo blk -&gt; ForgeStateInfo blk
+</span><span class="hs-identifier hs-var">unwrapForgeStateInfo</span></span><span>
+</span><span id="line-321"></span><span>
+</span><span id="line-322"></span><span>
+</span><span id="line-323"></span><span class="hs-comment">--</span><span>
+</span><span id="line-324"></span><span class="hs-comment">-- instances for HardForkForgeStateUpdateError</span><span>
+</span><span id="line-325"></span><span class="hs-comment">--</span><span>
+</span><span id="line-326"></span><span>
+</span><span id="line-327"></span><span class="hs-comment">-- It's a type alias:</span><span>
+</span><span id="line-328"></span><span class="hs-comment">-- type HardForkForgeStateUpdateError xs = OneEraForgeStateUpdateError xs</span><span>
+</span><span id="line-329"></span><span>
+</span><span id="line-330"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640268"><span id="local-6989586621679640270"><span id="local-6989586621679640961"><span class="annot"><span class="hs-identifier hs-type">All</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapForgeStateUpdateError</span></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679640961"><span class="hs-identifier hs-type">xs</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">OneEraForgeStateUpdateError</span></span><span> </span><span class="annot"><a href="#local-6989586621679640961"><span class="hs-identifier hs-type">xs</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-331"></span><span>    </span><span id="local-6989586621679640253"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; OneEraForgeStateUpdateError xs -&gt; Object
+</span><a href="#local-6989586621679640253"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640252"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640252"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span id="local-6989586621679640251"><span class="annot"><span class="annottext">OneEraForgeStateUpdateError xs
+</span><a href="#local-6989586621679640251"><span class="hs-identifier hs-var">forgeStateUpdateError</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-332"></span><span>        </span><span class="annot"><span class="annottext">forall a. Monoid a =&gt; [a] -&gt; a
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">mconcat</span></a></span><span>
+</span><span id="line-333"></span><span>          </span><span class="hs-special">[</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;kind&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;HardForkForgeStateUpdateError&quot;</span></span><span>
+</span><span id="line-334"></span><span>          </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Key
+</span><span class="hs-string">&quot;forgeStateUpdateError&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall kv v. (KeyValue kv, ToJSON v) =&gt; Key -&gt; v -&gt; kv
+</span><span class="hs-operator hs-var">.=</span></span><span> </span><span class="annot"><span class="annottext">forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Object
+</span><a href="#local-6989586621679640250"><span class="hs-identifier hs-var">forgeStateUpdateError'</span></a></span><span>
+</span><span id="line-335"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-336"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-337"></span><span>        </span><span class="annot"><a href="#local-6989586621679640250"><span class="hs-identifier hs-type">forgeStateUpdateError'</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Object</span></span><span>
+</span><span id="line-338"></span><span>        </span><span id="local-6989586621679640250"><span class="annot"><span class="annottext">forgeStateUpdateError' :: Object
+</span><a href="#local-6989586621679640250"><span class="hs-identifier hs-var hs-var">forgeStateUpdateError'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-339"></span><span>              </span><span class="annot"><span class="annottext">forall k l (h :: (k -&gt; *) -&gt; l -&gt; *) (xs :: l) a.
+(HCollapse h, SListIN h xs) =&gt;
+h (K a) xs -&gt; CollapseTo h a
+</span><span class="hs-identifier hs-var">hcollapse</span></span><span>
+</span><span id="line-340"></span><span>            </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall {k} {l} (h :: (k -&gt; *) -&gt; l -&gt; *) (c :: k -&gt; Constraint)
+       (xs :: l) (proxy :: (k -&gt; Constraint) -&gt; *) (f :: k -&gt; *)
+       (f' :: k -&gt; *).
+(AllN (Prod h) c xs, HAp h) =&gt;
+proxy c
+-&gt; (forall (a :: k). c a =&gt; f a -&gt; f' a) -&gt; h f xs -&gt; h f' xs
+</span><span class="hs-identifier hs-var">hcmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall {k} (t :: k). Proxy t
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-identifier hs-var">Proxy</span></a></span><span> </span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="annot"><span class="hs-operator hs-type">`Compose`</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">WrapForgeStateUpdateError</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-341"></span><span>                    </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall k a (b :: k). a -&gt; K a b
+</span><span class="hs-identifier hs-var">K</span></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640252"><span class="hs-identifier hs-var">dtal</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-342"></span><span>            </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall (xs :: [*]).
+OneEraForgeStateUpdateError xs -&gt; NS WrapForgeStateUpdateError xs
+</span><span class="hs-identifier hs-var">getOneEraForgeStateUpdateError</span></span><span>
+</span><span id="line-343"></span><span>            </span><span class="annot"><span class="annottext">forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="annot"><span class="annottext">OneEraForgeStateUpdateError xs
+</span><a href="#local-6989586621679640251"><span class="hs-identifier hs-var">forgeStateUpdateError</span></a></span><span>
+</span><span id="line-344"></span><span>
+</span><span id="line-345"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679640241"><span id="local-6989586621679640243"><span id="local-6989586621679640958"><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">ForgeStateUpdateError</span></span><span> </span><span class="annot"><a href="#local-6989586621679640958"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">LogFormatting</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">WrapForgeStateUpdateError</span></span><span> </span><span class="annot"><a href="#local-6989586621679640958"><span class="hs-identifier hs-type">blk</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-346"></span><span>    </span><span id="local-6989586621679640239"><span class="annot"><span class="annottext">forMachine :: DetailLevel -&gt; WrapForgeStateUpdateError blk -&gt; Object
+</span><a href="#local-6989586621679640239"><span class="hs-identifier hs-var hs-var hs-var hs-var">forMachine</span></a></span></span><span> </span><span id="local-6989586621679640238"><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640238"><span class="hs-identifier hs-var">dtal</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. LogFormatting a =&gt; DetailLevel -&gt; a -&gt; Object
+</span><span class="hs-identifier hs-var">forMachine</span></span><span> </span><span class="annot"><span class="annottext">DetailLevel
+</span><a href="#local-6989586621679640238"><span class="hs-identifier hs-var">dtal</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///usr/local/.ghcup/ghc/9.2.7/share/doc/ghc-9.2.7/html/libraries/base-4.16.4.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">forall blk.
+WrapForgeStateUpdateError blk -&gt; ForgeStateUpdateError blk
+</span><span class="hs-identifier hs-var">unwrapForgeStateUpdateError</span></span><span>
+</span><span id="line-347"></span></pre></body></html>
