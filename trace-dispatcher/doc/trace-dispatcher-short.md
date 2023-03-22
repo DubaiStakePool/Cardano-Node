@@ -19,6 +19,19 @@
     5. [Documentation](#documentation)
 5. [Cardano tracer](#cardano-tracer)
 6. [Configuration](#configuration)
+    1. [Configuring Severity](#configuring-severity)
+    2. [Configuring Detail Level](#configuring-detail-level)
+    3. [Configuring Frequency Limiting](#configuring-frequency-limiting)
+    4. [Configuring Backends](#configuring-backends)
+7. [Backends](#backends)
+8. [Data points](#data-points)
+9. [Special tracers](#special-tracers)
+    1. [Hook]
+    2. [Fold-based aggregation](#fold-based-aggregation)
+    3. [Trace routing](#trace-routing)
+10. [Documentation generation](#documentation-generation)
+11. [References](#references)
+
 
 ## Overview
 
@@ -46,19 +59,8 @@ The data types of trace messages need to be instances of the following two Typec
 To trace a message of a type like TraceAddBlockEvent we need to construct a matching __Trace__ TraceAddBlockEvent. The `mkCardanoTracer` function is doing this for us.
 The `mkCardanoTracer` gets as arguments the trace backends: `trStdout`, `trForward` and `mbTrEkg`, and a composed `name`, which is prepended to its namespace.
 
-Before the trace can be used we need to configure it with a configuration:
-
-```haskell
--- | Configure this tracer with a configuration. The first argument is a state which needs to be passed, the second argument is the configuration and the last is the trace.
---
-configureTracers :: forall a m.
-     (MetaTrace a
-  ,  MonadIO m)
-  => ConfigReflection
-  -> TraceConfig
-  -> [Trace m a]
-  -> m ()
-```
+Before the trace can be used we need to configure it with calling the configureTracers
+function with the tracers and an configuration.
 
 To actually emit a trace, given a __message__ and a corresponding __Trace__, the `traceWith` function needs to be used:
 
@@ -102,7 +104,7 @@ class LogFormatting a where
 
 ### Detail level
 
-An aspect of __trace presentation__ is the amount of details presented for each trace.  This is important, because the emitted __program traces__ might contain extreme details, which, if presented in full, would have made handling of the trace extremely expensive.  This detail control mechanism is configurable up to specific messages.
+An aspect of __trace presentation__ is the amount of details presented for each trace.  This is important, because the emitted __program traces__ might contain many details, which, if presented in full, would have made handling of the trace  expensive.  This detail control mechanism is configurable up to specific messages.
 
 This detail level control is expressed by:
 
@@ -154,7 +156,8 @@ class MetaTrace a where
 
 ### Trace namespace
 
-__Traces__ are organised into a hierarchical __tracer namespace__. (e.g. "ChainDB.OpenEvent.OpenedDB"). We repeat that the namespaces must be given in a way, that globally all messages have a unique namespace.
+__Traces__ are organised into a hierarchical __tracer namespace__. (e.g. "ChainDB.OpenEvent.OpenedDB").
+We base our implementation on the namespace, and require a one-to-one correspondence between namespaces and messages (bijective mapping). IMPORTANT: The namespaces must be given in a way, that globally all messages have a unique namespace.
 
 We differentiate between two components of a namespace. The inner namespace, which is specified with the `namespaceFor` method, and the prefix namespace, which is given as argument to the `mkCardanoTracer` function. E.g in the namespace `ChainDB.AddBlockEvent.IgnoreBlockAlreadyInVolatileDB` the prefix is `ChainDB` and the inner part is `AddBlockEvent.IgnoreBlockAlreadyInVolatileDB`. In this way the same trace datatype can be used for different tracers with different prefixes(e.g. one time for `ChainSync.Local` and another time `ChainSync.Remote`).
 
@@ -216,7 +219,7 @@ In effect, it is impossible to leak the `Confidential` traces due to logging mis
 
 We already treated the detail level in the section about formatting, and the detail level for individual messages can be specified with the `detailsFor` function of class MetaTrace. The implementation is optional, and if not implemented the detail level defaults to `DNormal` for all messages.
 
-If a value for the detail level is specified in the configuration, it is usd instead of the detail level specified here!
+If a value for the detail level is specified in the configuration, it is used instead of the detail level specified here!
 
 ### Documentation
 
@@ -269,87 +272,85 @@ configureTracers :: forall a m.
   -> m ()
 ```
 
+The configuration is read from a file, but it has been decided to hard code a standard configuration for the purpose of ease of migration. This default configuration is given in the module [Cardano.Node.Tracing.DefaultTraceConfig](https://github.com/input-output-hk/cardano-node/blob/master/cardano-node/src/Cardano/Node/Tracing/DefaultTraceConfig.hs). In the config file all entries of the default configuration can be overridden. (To remove a frequency limiter, define a limiter with maxFrequency 0.0.)
 
+The configuration file can be in JSON or YAML format. We will give the examples here in Yaml format
 
+The namespaces are used for configuration values. Any value applies to all the trace messages which starts with the given namespace. To set a global value use the empty namespace "". This works down to individual messages, and the value of the more specific namespace overwrites the more general.
 
+The options you can set for trace messages in this way are: Severity, Detail, Limiter and Backends.
 
+### Configuring Severity
 
-The configurability of __dispatchers__ this library allows to define is based on:
-
-1. __Tracer namespace__-based configurability, down to single __message__ granularity,
-2. Runtime reconfigurability, triggered by invocation of `configureTracers`,
-3. Documentation entries __message__.
-
-Reconfiguration can be triggered at runtime and essentially involves running the entire __dispatcher__ trace network, by doing trace specialisation for each trace that has documentation entries defined.
-
-```haskell
--- The function configures the traces with the given configuration
-configureTracers :: Monad m => TraceConfig -> Documented a -> [Trace m a]-> m ()
-```
-
-These are the options that can be configured based on a namespace:
-
-```haskell
-data ConfigOption =
-    -- | Severity level for filtering (default is Warning)
-    ConfSeverity SeverityF
-    -- | Detail level of message representation (Default is DNormal)
-  | ConfDetail DetailLevel
-  -- | To which backend to pass
-  -- Default is [EKGBackend, Forwarder, Stdout HumanFormatColoured]
-  | ConfBackend [BackendConfig]
-  -- | Construct a limiter with name (Text) and limiting to the Double,
-  -- which represents frequency in number of messages per second
-  | ConfLimiter Double
-
-data BackendConfig =
-    Forwarder
-  | Stdout FormatLogging
-  | EKGBackend
-
-data TraceConfig = TraceConfig {
-     -- | Options specific to a certain namespace
-    tcOptions            :: Map.Map NamespaceOuter [ConfigOption]
-     -- | Options for trace-forwarder
-  , ...
-}
-```
-
-If the configuration file is in Yaml format, the following entry means, that by default
-all messages with Info or higher Priority are shown:
+Specify a filter for the severity of the messages you want to see, e.g.:
 
 ```yaml
-```
+# Show messages of Severity Notice or higher as default
+"":
+    severity: Notice
 
-But if you want to see Debug messages of the ChainDB trace, then add:
-
-```yaml
-  Node:
+  # But show ChainDB messages starting from Info
+ChainDB:
     severity: Info
-  Node.ChainDB:
-    severity: Debug
 ```
 
-And if you never want to see any message of the AcceptPolicy trace, then add:
+If you don't want to see any messages from tracers the new severity `Silence` exists, which suppresses all messages.
+
+### Configuring Detail level
 
 ```yaml
-  Node:
-    severity: Info
-  Node.ChainDB:
-    severity: Debug
-  Node.AcceptPolicy:
-    severity: SilentF
+"":
+    # Keep this
+    severity: Notice
+    # All messages are shown with normal detail level
+    detail: DNormal
+
+Forge.Loop.AdoptedBlock:
+    detail: DDetailed
 ```
 
-As another example, if you don't want to see more then 1 BlockFetchClient
-message per second, then add this to your configuration file:
+Other options would be DMinimal and DMaximum. This has only an effect on messages which support the representation in different ways.
+
+### Configuring Frequency limiting
+
+Hardcoded eliding tracers are not supported in new-tracing, instead you can limit the frequency in which messages get shown.
 
 ```yaml
-  Node.BlockFetchClient:
-    maxFrequency: 1.0
+ChainDB.AddBlockEvent.AddedBlockToQueue:
+    # Only show a maximum of 2 of these messages per second
+    maxFrequency: 2.0
 ```
 
-In Cardano a default configuration is given in the module [Cardano.Node.Tracing.DefaultTraceConfig](https://github.com/input-output-hk/cardano-node/blob/master/cardano-node/src/Cardano/Node/Tracing/DefaultTraceConfig.hs). In the config file all entries of the default configuration can be overridden. To remove a frequency limiter, define a limiter with maxFrequency 0.0.
+The activity of limiters will be written in the traces as well. It will write a StartLimiting message with the limiter name, when the limiter starts. It will write a RememberLimiting message every 10 seconds with the limiter name and the number of suppressed messages so far. Finally it will write a StopLimiting message with the limiter name and the total number of suppressed messages, when the limiter is deactivated through a lower number of arriving messages.
+
+### Configuring Backends
+Specify the backends the messages are routed to.
+
+```yaml
+"":
+    # Keep this
+    severity: Notice
+    # And this
+    detail: DNormal
+    # And specify a list of backends to use
+    backends:
+      - Stdout MachineFormat
+      - EKGBackend
+      - Forwarder
+```
+
+These are all the backends currently supported. With Stdout you have the
+options MachineFormat or HumanFormatColoured/HumanFormatUncoloured.
+If messages don't support representation in HumanFormat* they are shown in MachineFormat anyway.
+
+Forwarder means that messages are send to cardano-tracer
+
+### Reconfiguration
+
+The trace-dispatcher library allows tracer-reconfiguration at runtime without a
+restart of the node. However, for a while both tracing systems will be present in parallel. In this transition time new tracing will for technical reason have a restricted functionality, so that the reconfiguration of a running node is currently not available.
+
+## Functions for special tracers
 
 
 
