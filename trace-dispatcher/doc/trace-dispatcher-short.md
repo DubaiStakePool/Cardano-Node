@@ -23,19 +23,22 @@
     2. [Configuring Detail Level](#configuring-detail-level)
     3. [Configuring Frequency Limiting](#configuring-frequency-limiting)
     4. [Configuring Backends](#configuring-backends)
-7. [Backends](#backends)
-8. [Data points](#data-points)
-9. [Special tracers](#special-tracers)
+7. [Reconfiguration](#reconfiguration)
+8. [Special tracers](#special-tracers)
     1. [Hook]
     2. [Fold-based aggregation](#fold-based-aggregation)
     3. [Trace routing](#trace-routing)
-10. [Documentation generation](#documentation-generation)
+9. [Documentation generation](#documentation-generation)
+10. [DataPoints](#datapoints)
 11. [References](#references)
 
 
 ## Overview
 
 In this overview we shortly touch a lot of aspects, which will be explained in more detail later.
+
+As we use the contravariant tracer library as basics you need to familiarize yourself
+with this concept. Basically contravariant means that the flow is turned around from what you have normally. The tracer input to a function is at the result position, while the output is the argument. As well `do` expressions which input and output tracers have to be read from bottom to top.
 
 __Traces__ begin with a definition of a datatype with __messages__. E.g. `TraceAddBlockEvent` is the datatype and `IgnoreBlockOlderThanK` a message:
 
@@ -324,6 +327,7 @@ ChainDB.AddBlockEvent.AddedBlockToQueue:
 The activity of limiters will be written in the traces as well. It will write a StartLimiting message with the limiter name, when the limiter starts. It will write a RememberLimiting message every 10 seconds with the limiter name and the number of suppressed messages so far. Finally it will write a StopLimiting message with the limiter name and the total number of suppressed messages, when the limiter is deactivated through a lower number of arriving messages.
 
 ### Configuring Backends
+
 Specify the backends the messages are routed to.
 
 ```yaml
@@ -345,12 +349,191 @@ If messages don't support representation in HumanFormat* they are shown in Machi
 
 Forwarder means that messages are send to cardano-tracer
 
-### Reconfiguration
+## Reconfiguration
 
 The trace-dispatcher library allows tracer-reconfiguration at runtime without a
 restart of the node. However, for a while both tracing systems will be present in parallel. In this transition time new tracing will for technical reason have a restricted functionality, so that the reconfiguration of a running node is currently not available.
 
-## Functions for special tracers
+## Special tracers
+
+Some tracers are special, in that the trace system shall aggregate data, or do computations
+on the data of messages. For these tracers you can use more basic functions of the underlying library, as we describe in this section.
+
+If you want to change the general behavior of tracing, you may need to change the
+implementation of the `mkCardanoTracer` function. But we will not treat this topic here.
+
+### Hook
+
+We provide a special version of mkCardanoTracer called mkCardanoTracer', which adds
+as a last argument a hook functions, which allows it to transform the tracer in an `IO` context.
+
+```haskell
+-- | Adds the possibility to add special tracers via the hook function
+mkCardanoTracer' :: forall msg msg1.
+     ( LogFormatting msg1
+     , MetaTrace msg1)
+  => Trace IO FormattedMessage
+  -> Trace IO FormattedMessage
+  -> Maybe (Trace IO FormattedMessage)
+  -> [Text]
+  -> (Trace IO msg1 -> IO (Trace IO msg))
+  -> IO (Trace IO msg)
+```
+
+As always in the world of contravariance, the hook function has to be read reversed,
+so a trace of type msg is transformed to a type msg1. Of course you can use this hook
+mechanism as well for transformations and aggregations which don't change the type, so that msg and msg1 are the same type.
+
+### Fold-based aggregation
+
+If aggregated information from multiple consecutive messages is needed the following fold functions can be used:
+
+
+```haskell
+-- | Folds the cata function with state acc over a.
+-- Uses an MVar to store the state
+foldMTraceM :: MonadUnliftIO m
+  => (acc -> LoggingContext -> a -> m acc)
+  -> acc
+  -> Trace m (Folding a acc)
+  -> m (Trace m a)
+
+newtype Folding a acc = Folding acc
+```
+
+Since __tracers__ can be invoked from different threads, an `MVar` is used internally to secure correct behaviour.
+
+As an example we want to log a measurement value together with the sum of all measurements that occurred so far.  For this we define a `Measure` type to hold a `Double`, a `Stats` type to hold the the sum together with the measurement and a `fold`-friendly function to calculate new `Stats` from old `Stats` and `Measure`:
+
+```haskell
+data Stats = Stats {
+    sMeasure :: Double,
+    sSum     :: Double
+    }
+
+calculateS :: Stats -> Double -> m Stats
+calculateS Stats{..} val = pure $ Stats val (sSum + val)
+```
+
+Then we can define the aggregation  with the procedure foldMTraceM in the
+following way, and it will output the Stats:
+
+```haskell
+  aggroTracer <- foldMTraceM calculateS (Stats 0.0 0.0) exTracer
+```
+### Trace routing
+
+To send the message of a trace to different tracers depending on some criteria use the following function
+
+-- | Allows to route to different tracers, based on the message being processed.
+--   The second argument must mappend all possible traces of the first
+--   argument to one . This is required for the configuration!
+
+```haskell
+routingTrace :: Monad m => (a -> m (Trace m a)) -> Trace m a -> m (Trace m a)
+let resTrace = routingTrace routingf (tracer1 <> tracer2)
+  where
+    routingf LO1 {} = tracer1
+    routingf LO2 {} = tracer2
+```
+
+The second argument must mappend all traces used in the routing trace function to one trace. This is required for the configuration. We could have construct a more secure interface by having a map of values to tracers, but the ability for full pattern matching outweigh this disadvantage in our view.
+In the following example we send the messages of one trace to two tracers simultaneously:
+
+```haskell
+let resTrace = tracer1 <> tracer2
+```
+
+To route one trace to multiple tracers simultaneously we use the fact that Tracer is a `Semigroup` and then use `<>`, or `mconcat` for lists of tracers:
+
+```haskell
+(<>) :: Monoid m => m -> m -> m
+mconcat :: Monoid m => [m] -> m
+```
+
+In the next example we unite two traces to one trace, for which we trivially use the same trace on the right side.
+
+```haskell
+tracer1  = appendName "tracer1" exTracer
+tracer2  = appendName "tracer2" exTracer
+```
+
+## Documentation generation
+
+The node can be called with the `trace-documentation` command, which takes the arguments
+`config` and `output-file`, which are both path's to files. The first one points to a
+valid configuration, and the second one depicts the generated output file.
+
+```haskell
+data TraceDocumentationCmd
+  = TraceDocumentationCmd
+    { tdcConfigFile :: FilePath
+    , tdcOutput     :: FilePath
+    }
+
+runTraceDocumentationCmd
+  :: TraceDocumentationCmd
+  -> IO ()
+```
+
+A periodically generated documentation of the traces can be found in the cardano-node repository in the path `cardano-node/doc/new-tracing/tracers_doc_generated.md`
+
+## DataPoints
+
+DataPoints gives the ability for processes other then cardano-node to query the provided
+runtime state of a node. DataPoints are equal to metrics, in that they are not written in textual
+form to a log, but in contrast to metrics they have an ADT structure, so they can trace
+any structured information. As a result, they give the ability for external processes
+other then cardano-node to query the provided runtime state of a node (for example,
+node's basic information).
+
+DataPoints are implemented as special tracers, which packs the objects into DataPoint
+constructors and require a ToJSON instance for that objects. The set of DataPoints
+provided by the node is structured using the same namespace as metrics and log messages.
+But otherwise DataPoints work independent of tracing, but are written in a local store,
+so the latest value of a particular DataPoint can be queried on demand.
+
+Also, [there is a document](https://github.com/input-output-hk/cardano-node/wiki/cardano-node-and-DataPoints:-demo)
+describing how to accept DataPoints from an external process.
+
+[`demo-acceptor`](https://github.com/input-output-hk/cardano-node/blob/master/cardano-tracer/demo/acceptor.hs)
+application allows to ask for particular DataPoint by its name and display its value.
+
+```haskell
+-- A simple dataPointTracer which supports building a namespace
+-- `trDataPoint`: shall be the datapoint backend
+-- `namesFor`: shall be a function to produce a namespace for every
+-- datapoint constructor
+mkDataPointTracer :: forall dp. ToJSON dp
+  => Trace IO DataPoint
+  -> (dp -> [Text])
+  -> IO (Trace IO dp)
+mkDataPointTracer trDataPoint namesFor = do
+    let tr = NT.contramap DataPoint trDataPoint
+    pure $ withNamesAppended namesFor tr
+```
+
+Also, [there is a document](https://github.com/input-output-hk/cardano-node/wiki/cardano-node-and-DataPoints:-demo)
+describing how to accept DataPoints from an external process. [`demo-acceptor`](https://github.com/input-output-hk/cardano-node/blob/master/cardano-tracer/demo/acceptor.hs) application allows to ask for particular DataPoint by its name and display its value.
+
+## References
+
+This is a document which is regenerated periodically and documents all trace-messages,  metrics and data-points in cardano-node. It as well displays the handling of these
+messages with the current default configuration:
+
+[Gernerated Cardano Trace Documentation](https://github.com/input-output-hk/cardano-node/blob/master/doc/new-tracing/tracers_doc_generated.md)
+
+For a quick start into new tracing see the document:
+
+[New Tracing Quickstart](https://github.com/input-output-hk/cardano-node/blob/master/doc/New%20Tracing%20Quickstart.md)
+
+This document describes a separate service for logging and monitoring Cardano nodes:
+
+[Cardano Tracer](https://github.com/input-output-hk/cardano-node/blob/master/cardano-tracer/docs/cardano-tracer.md)
+
+This document describes how to accept DataPoints from an external process:
+
+[cardano node and DataPoints: demo](https://github.com/input-output-hk/cardano-node/wiki/cardano-node-and-DataPoints:-demo)
 
 
 
