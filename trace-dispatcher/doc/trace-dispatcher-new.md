@@ -7,30 +7,91 @@
 ## Contents
 
 1. [Contents](#contents)
-2. [Overview](#overview)
-3. [Formatting](#formatting)
+2. [Introduction](#Introduction)
+   1. [Motivation](#motivation)
+   2. [Design decisions](#Design-decisions)
+   3. [Terminology](#Overview-and-terminology)
+3. [Overview](#overview)
+4. [Formatting](#formatting)
     1. [Detail level](#detail-level)
     2. [Metrics](#metrics)
-4. [MetaTrace](#metatrace)
+5. [MetaTrace](#metatrace)
     1. [Trace namespace](#trace-namespace)
     2. [Severity](#severity)
     3. [Privacy](#privacy)
     4. [Detail level again](#detail-level-again)
     5. [Documentation](#documentation)
-5. [Cardano tracer](#cardano-tracer)
-6. [Configuration](#configuration)
+6. [Cardano tracer](#cardano-tracer)
+7. [Configuration](#configuration)
     1. [Configuring Severity](#configuring-severity)
     2. [Configuring Detail Level](#configuring-detail-level)
     3. [Configuring Frequency Limiting](#configuring-frequency-limiting)
     4. [Configuring Backends](#configuring-backends)
-7. [Reconfiguration](#reconfiguration)
-8. [Special tracers](#special-tracers)
+8. [Reconfiguration](#reconfiguration)
+9. [Special tracers](#special-tracers)
     1. [Hook]
     2. [Fold-based aggregation](#fold-based-aggregation)
     3. [Trace routing](#trace-routing)
-9. [Documentation generation](#documentation-generation)
-10. [DataPoints](#datapoints)
-11. [References](#references)
+10. [Documentation generation](#documentation-generation)
+11. [DataPoints](#datapoints)
+12. [References](#references)
+
+## Introduction
+
+### Motivation
+
+`trace-dispatcher` is an implementation of simple, efficient __tracing systems__, one that has a reduced footprint in the executed program, has a more pleasant API, and provides self-documenting features.
+
+For a quick start into new tracing see the document
+[New Tracing Quickstart](https://github.com/input-output-hk/cardano-node/blob/master/doc/new-tracing/New%20Tracing%20Quickstart.md)
+
+## Design decisions
+
+Key design decisions were:
+
+1. Retaining the separation of concerns in the frontend side, as provided by the `contra-tracer` library.  The client code should not need to concern itself with any details beyond passing the traces down to the system.
+2. Rely on __trace combinators__ primarily, as opposed to opting for a typeclass heavy API.
+3. Separation of data plane and control plane:  high-frequency events of the data-plane (corresponding to actual trace emission), whereas complicated configuration-induced logic of the control plane is proportional to infrequent reconfiguration events.  This is the principle we tried to ensure across the system -- and hopefully succeeded to a reasonable degree.
+4. A tougher stance on separation of concerns in the backend side:  we choose to move expensive trace processing to an external process, which is called cardano-tracer.
+5. A measure of backward compatibility with the previous logging system.
+6. Retaining a global namespace for all traces.
+
+### Terminology
+
+The emitted __program traces__ (streams of __messages__ of arbitrary data types, where each data type defines a number of different __messages__) are collected across all program components, and undergo __trace interpretation__ by the __dispatcher__ into __metrics__ and __messages__, which are afterwards externalised.
+
+Therefore, we can conceptually decompose the __tracing system__ into three components:
+
+* __frontend__, the entry point for __program trace__ collection, which is just a single function `traceWith`;  Program locations that invoke this frontend (thereby injecting messages into the tracing system) is called __trace-ins__.
+* __dispatcher__, is a structured, namespaced set of contravariantly-composed transformations, triggered by the entry point.  Its role is specifically __trace interpretation__;
+* __backend__, externalises results of the interpretation ( __metrics__ and __messages__) outside the tracing system, through __trace-outs__.
+
+The trace-emitting program itself is only exposed to the the frontend part of the tracing system, as it only needs to define the traces themselves, and specify the __trace-ins__ -- call sites that inject traces.  It is notably free from any extra obligations, such as the need to define the `LogFormatting` instances.
+
+As mentioned above, __dispatcher__ is the point of interpretation of the program traces -- a structured set of __Tracer__ objects, that defines and implements the __language and policy__ of __trace interpretation__.
+
+__Trace interpretation__ is specified in terms of:
+
+* __trace synthesis__, which means production of __synthetic traces__ -- in cases where we decide it is cheaper (or at all possible) to perform trace aggregation inside the program,
+* __trace naming__, which is assignment of hierarchically-structured names to all traces -- which serve identification, documentation and configuration purposes,
+* __trace filtering__: which, in turn relies on notions of __severity__, __privacy__ and __frequency__ of messages,
+* __trace presentation__ : relying on __detail level__ and on the `LogFormatting` transformation of the traces into JSON, human readable and metric forms -- the last step before traces meet their __trace-outs__,
+* __trace documentation__, as a mode of the __dispatcher__ operation.
+
+The __trace interpretation__ process requires that for each traced type the __dispatcher__ is provided with:
+
+* instances of `MetaTrace` typeclass, to provide a namespace and a severity and optionally privacy and detail level.
+  In addition a __trace documentation__ for trace messages and metrics needs to be provided.
+  Finally all namespaces for a type needs to be specified.
+* instances of the `LogFormatting` typeclass, to specify different formatting possibilities.
+
+__Trace interpretation__ would have been unusably static, if it wasn't allowed to be configured without recompilation -- and therefore the __effective tracing policy__ used by the __dispatcher__ can be defined by the externally-supplied __trace configuration__.
+
+The __effective tracing policy__ defines for each trace a __trace context__, which is what effectively informs interpretation performed by the __dispatcher__ for that particular trace.
+
+The __trace context__, in turn, consists of the __logging context__ encoded in the __dispatcher__, and the __configuration context__ coming from the __trace configuration__.
+
+As a final note, the __dispatcher__ is not provided by the `trace-dispatcher` library as a ready-made, turn-key component -- instead, we are provided with __trace combinators__, the building blocks that allow its construction -- and therefore, expression of the desirable __trace interpretation policies__.
 
 
 ## Overview
@@ -398,7 +459,11 @@ foldMTraceM :: MonadUnliftIO m
   -> Trace m (Folding a acc)
   -> m (Trace m a)
 
+-- |The Folding helper type
 newtype Folding a acc = Folding acc
+
+-- |Function to unpack from Folding type
+unfold :: Folding a acc -> acc
 ```
 
 Since __tracers__ can be invoked from different threads, an `MVar` is used internally to secure correct behaviour.
@@ -512,9 +577,6 @@ mkDataPointTracer trDataPoint namesFor = do
     let tr = NT.contramap DataPoint trDataPoint
     pure $ withNamesAppended namesFor tr
 ```
-
-Also, [there is a document](https://github.com/input-output-hk/cardano-node/wiki/cardano-node-and-DataPoints:-demo)
-describing how to accept DataPoints from an external process. [`demo-acceptor`](https://github.com/input-output-hk/cardano-node/blob/master/cardano-tracer/demo/acceptor.hs) application allows to ask for particular DataPoint by its name and display its value.
 
 ## References
 
