@@ -171,6 +171,7 @@ instance MetaTrace NodeInfo where
         \\n _niName_: Name of the node. \
         \\n _niProtocol_: Protocol which this nodes uses. \
         \\n _niVersion_: Software version which this node is using. \
+        \\n _niCommit_: The commit id this node is built from. \
         \\n _niStartTime_: Start time of this node. \
         \\n _niSystemStartTime_: How long did the start of the node took."
   documentFor _ns =

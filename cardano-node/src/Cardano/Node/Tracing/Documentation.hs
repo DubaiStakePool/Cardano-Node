@@ -221,6 +221,20 @@ docTracers configFileName outputFileName _ _ _ = do
     configureTracers configReflection trConfig [peersTr]
     peersTrDoc <- documentTracer (peersTr :: Trace IO  [PeerT blk])
 
+    -- NodeState datapoint
+    nodeStateTr <- mkDataPointTracer
+                trDataPoint
+                ["NodeState"]
+    configureTracers configReflection trConfig [nodeStateTr]
+    nodeStateTrDoc <- documentTracer (nodeStateTr :: Trace IO SR.NodeState)
+
+    -- NodeState tracer
+    nodePeersTr <- mkDataPointTracer
+                trDataPoint
+                (const ["NodePeers"])
+    configureTracers configReflection trConfig [nodePeersTr]
+    nodePeersTrDoc <- documentTracer (nodePeersTr :: Trace IO NodePeers)
+
     -- Resource tracer
     resourcesTr <- mkCardanoTracer
                 trBase trForward mbTrEKG
@@ -684,10 +698,13 @@ docTracers configFileName outputFileName _ _ _ = do
     let bl =   nodeInfoTrDoc
             <> stateTrDoc
             <> nodeStartupInfoTrDoc
+            nodeStateDPDoc
             <> resourcesTrDoc
             <> startupTrDoc
             <> shutdownTrDoc
             <> peersTrDoc
+            <> nodeStateTrDoc
+            <> nodePeersTrDoc
             <> chainDBTrDoc
             <> replayBlockTrDoc
 -- Consensus

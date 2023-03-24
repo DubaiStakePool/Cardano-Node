@@ -309,7 +309,6 @@ setDetails p (Trace tr) = Trace $
       tr
 
 -- | Sets detail level for the messages in this trace based on the message
--- TODO Yup handle exception
 withDetails :: forall m a. (Monad m, MetaTrace a) => Trace m a -> Trace m a
 withDetails (Trace tr) = Trace $
   T.contramap
