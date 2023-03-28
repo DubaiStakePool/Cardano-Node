@@ -7,10 +7,10 @@
 ## Contents
 
 1. [Contents](#contents)
-2. [Introduction](#Introduction)
+2. [Introduction](#introduction)
    1. [Motivation](#motivation)
-   2. [Design decisions](#Design-decisions)
-   3. [Terminology](#Overview-and-terminology)
+   2. [Design decisions](#design-decisions)
+   3. [Terminology](#overview-and-terminology)
 3. [Overview](#overview)
 4. [Formatting](#formatting)
     1. [Detail level](#detail-level)
