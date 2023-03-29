@@ -433,9 +433,9 @@ genUTxO :: CardanoEra era -> Gen (UTxO era)
 genUTxO era =
   UTxO <$> Gen.map (Range.constant 0 5) ((,) <$> genTxIn <*> (toCtxUTxOTxOut <$> genTxOutTxContext era))
 
-genUTxOMas :: CardanoEra era -> Gen (UTxO era)
-genUTxOMas era =
-  UTxO <$> Gen.map (Range.constant 0 5) ((,) <$> genTxIn <*> (toCtxUTxOTxOut <$> genTxOutTxContextMa era))
+genUTxOMas :: Range Int -> CardanoEra era -> Gen (UTxO era)
+genUTxOMas r era =
+  UTxO <$> Gen.map r ((,) <$> genTxIn <*> (toCtxUTxOTxOut <$> genTxOutTxContextMa era))
 
 
 genTxOutTxContextMa :: CardanoEra era -> Gen (TxOut CtxTx era)
