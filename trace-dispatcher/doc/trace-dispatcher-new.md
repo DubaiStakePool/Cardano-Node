@@ -1,6 +1,6 @@
 # trace-dispatcher: efficient, simple and flexible program tracing
 
-`trace-dispatcher` is a simple, efficient __tracing library__, that is based on the contravariant tracing library and should use little resources in the executed program, has a pleasant API, and provides self-documenting features.
+`trace-dispatcher` is a simple, efficient __tracing library__, that is based on the contravariant tracing library. It should use little resources in the executed program, has a pleasant API, and provides self-documenting features.
 
 `trace-dispatcher` consists of generic combinators, which are then used in functions specific for the cardano application.
 
@@ -38,21 +38,20 @@
 
 ## Introduction
 
-### Motivation
+This document is targeted for developers.
 
-`trace-dispatcher` is an implementation of simple, efficient __tracing systems__, one that has a reduced footprint in the executed program, has a more pleasant API, and provides self-documenting features.
-
-For a quick start into new tracing see the document
+For a quick start into setup and configuration of new tracing see the document
 [New Tracing Quickstart](https://github.com/input-output-hk/cardano-node/blob/master/doc/new-tracing/New%20Tracing%20Quickstart.md)
+
 
 ## Design decisions
 
 Key design decisions were:
 
-1. Retaining the separation of concerns in the frontend side, as provided by the `contra-tracer` library.  The client code should not need to concern itself with any details beyond passing the traces down to the system.
+1. Retaining the separation of concerns in the frontend side, as provided by the `contra-tracer` library. The client code should not need to concern itself with any details beyond passing the traces down to the system.
 2. Rely on __trace combinators__ primarily, as opposed to opting for a typeclass heavy API.
-3. Separation of data plane and control plane:  high-frequency events of the data-plane (corresponding to actual trace emission), whereas complicated configuration-induced logic of the control plane is proportional to infrequent reconfiguration events.  This is the principle we tried to ensure across the system -- and hopefully succeeded to a reasonable degree.
-4. A tougher stance on separation of concerns in the backend side:  we choose to move expensive trace processing to an external process, which is called cardano-tracer.
+3. Separation of data plane and control plane: high-frequency events of the data-plane (corresponding to actual trace emission), whereas complicated configuration-induced logic of the control plane is proportional to infrequent reconfiguration events. This is the principle we tried to ensure across the system -- and hopefully succeeded to a reasonable degree.
+4. A tougher stance on separation of concerns in the backend side:  we choose to move expensive trace processing to an external process, which is called `cardano-tracer`.
 5. A measure of backward compatibility with the previous logging system.
 6. Retaining a global namespace for all traces.
 
@@ -62,11 +61,11 @@ The emitted __program traces__ (streams of __messages__ of arbitrary data types,
 
 Therefore, we can conceptually decompose the __tracing system__ into three components:
 
-* __frontend__, the entry point for __program trace__ collection, which is just a single function `traceWith`;  Program locations that invoke this frontend (thereby injecting messages into the tracing system) is called __trace-ins__.
+* __frontend__, the entry point for __program trace__ collection, which is just a single function `traceWith`. Program locations that invoke this frontend (thereby injecting messages into the tracing system) is called __trace-ins__.
 * __dispatcher__, is a structured, namespaced set of contravariantly-composed transformations, triggered by the entry point.  Its role is specifically __trace interpretation__;
-* __backend__, externalises results of the interpretation ( __metrics__ and __messages__) outside the tracing system, through __trace-outs__.
+* __backend__, externalises results of the interpretation (__metrics__ and __messages__) outside the tracing system, through __trace-outs__.
 
-The trace-emitting program itself is only exposed to the the frontend part of the tracing system, as it only needs to define the traces themselves, and specify the __trace-ins__ -- call sites that inject traces.  It is notably free from any extra obligations, such as the need to define the `LogFormatting` instances.
+The trace-emitting program itself is only exposed to the the frontend part of the tracing system, as it only needs to define the traces themselves, and specify the __trace-ins__ -- call sites that inject traces.  It is notably free from any extra obligations, such as the need to define the `LogFormatting` and `MetaTrace` instances.
 
 As mentioned above, __dispatcher__ is the point of interpretation of the program traces -- a structured set of __Tracer__ objects, that defines and implements the __language and policy__ of __trace interpretation__.
 
@@ -120,11 +119,11 @@ The data types of trace messages need to be instances of the following two Typec
 
 * instances of the `LogFormatting` typeclass, to specify transformations to output.
 
-To trace a message of a type like TraceAddBlockEvent we need to construct a matching __Trace__ TraceAddBlockEvent. The `mkCardanoTracer` function is doing this for us.
+To trace a message of a type like `TraceAddBlockEvent` we need to construct a matching `Trace TraceAddBlockEvent`. The `mkCardanoTracer` function is doing this for us.
 The `mkCardanoTracer` gets as arguments the trace backends: `trStdout`, `trForward` and `mbTrEkg`, and a composed `name`, which is prepended to its namespace.
 
 Before the trace can be used we need to configure it with calling the configureTracers
-function with the tracers and an configuration.
+function with the tracers and a configuration.
 
 To actually emit a trace, given a __message__ and a corresponding __Trace__, the `traceWith` function needs to be used:
 
@@ -136,9 +135,9 @@ traceWith :: Trace m a -> a -> m ()
 traceWith trAddBlock (IgnoreBlockOlderThanK p)
 ```
 
-This results in writing the message to different backends, depending on the configuration. The main backend is a __Forwarder__, which sends the message to cardano-tracer. Other backends are __Stdout__ for writing directly to the console and __EKGBackend__ for metrics.
+This results in writing the message to different backends, depending on the configuration. The main backend is a __Forwarder__, which sends the message to `cardano-tracer`. Other backends are __Stdout__ for writing directly to the console and __EKGBackend__ for metrics.
 
-Now we will explain all the library in more detail:
+Now we will explain the library in more detail:
 
 ## Formatting
 
@@ -153,7 +152,7 @@ messages to __metrics__ and __text__.
 
 * the `asMetrics` method shall represent the message as `0` to `n` metrics.
   It's default implementation assumes no metrics. Each metric can optionally
-  specify a namespace as a `[Text]`.
+  specify a name as a `Text`.
 
 ```haskell
 class LogFormatting a where
@@ -180,9 +179,9 @@ data DetailLevel = DMinimal | DNormal | DDetailed | DMaximum
 
 Metrics are provided by normal trace messages, which implement the `asMetrics` function of the `LogFormatting` typeclass. However, metrics are never filtered out.
 
-As well metrics use their own names, which are different from the namespace of the messages.
+Additionally, Metrics use their own names, which are different from the namespace of the messages.
 
-`ekgTracer`is used as the metrics backend. It forwards the metrics to cardano-tracer for further processing.
+`ekgTracer` is used as the metrics backend. It forwards the metrics to `cardano-tracer` for further processing.
 
 ```haskell
 data Metric
@@ -221,27 +220,26 @@ class MetaTrace a where
 ### Trace namespace
 
 __Traces__ are organised into a hierarchical __tracer namespace__. (e.g. "ChainDB.OpenEvent.OpenedDB").
-We base our implementation on the namespace, and require a one-to-one correspondence between namespaces and messages (bijective mapping). IMPORTANT: The namespaces must be given in a way, that globally all messages have a unique namespace.
+We base our implementation on the namespace, and require a one-to-one correspondence between namespaces and messages (bijective mapping). _IMPORTANT_: The namespaces must be given in a way, that globally all messages have a unique namespace.
 
-We differentiate between two components of a namespace. The inner namespace, which is specified with the `namespaceFor` method, and the prefix namespace, which is given as argument to the `mkCardanoTracer` function. E.g in the namespace `ChainDB.AddBlockEvent.IgnoreBlockAlreadyInVolatileDB` the prefix is `ChainDB` and the inner part is `AddBlockEvent.IgnoreBlockAlreadyInVolatileDB`. In this way the same trace datatype can be used for different tracers with different prefixes(e.g. one time for `ChainSync.Local` and another time `ChainSync.Remote`).
+We differentiate between two components of a namespace. The inner namespace, which is specified with the `namespaceFor` method, and the prefix namespace, which is given as argument to the `mkCardanoTracer` function. E.g in the namespace `ChainDB.AddBlockEvent.IgnoreBlockAlreadyInVolatileDB` the prefix is `ChainDB` and the inner part is `AddBlockEvent.IgnoreBlockAlreadyInVolatileDB`. In this way the same trace datatype can be used for different tracers with different prefixes (e.g. one time for `ChainSync.Local` and another time `ChainSync.Remote`).
 
 ```haskell
 -- | A unique identifier for every message, composed of text
--- A namespace can as well appear with the tracer name (,
--- or more prefixes, in this moment it is a NamespaceOuter is used
+--   a prefix and an inner part. The prefix is set from
+--   the tracerPrefix argument of mkCardanoTracer
 data Namespace a = Namespace {
     nsPrefix :: [Text]
-  , nsInner :: [Text]}
-  deriving Eq
+  , nsInner  :: [Text]}
 ```
 
-The __namespace__ is central to the functioning of trace-dispatcher and is used in different contexts:
+The __namespace__ is central to the functioning of `trace-dispatcher` and is used in different contexts:
 
 * __trace-backend__, where the messages display the namespace.
 * __documentation__, where it defines the overall structure of the generated documentation output,
 * __configuration__, where it allows referring to tracer we want to reconfigure in some way, such as changing their severity,
 
-ATTENTION: For every trace the function `allNamespaces` have to return a list of all namespaces. The correct implementation of this function is important for the correct working of trace-dispatcher.
+_ATTENTION_: For every trace the class member `allNamespaces` has to define a list of each namespace. The correct definition of this is vital for the correct behavior of the library.
 
 ### Severity
 
@@ -267,7 +265,7 @@ data Privacy
     = Confidential | Public
 ```
 
-The privacy of a message is specified by the `privacyFor`method of class MetaTrace. It defaults to public if not specified.
+The privacy of a message is specified by the `privacyFor` method of class MetaTrace. It defaults to public if not specified.
 
 Trace privacy cannot be configured.
 
@@ -283,7 +281,7 @@ In effect, it is impossible to leak the `Confidential` traces due to logging mis
 
 We already treated the detail level in the section about formatting, and the detail level for individual messages can be specified with the `detailsFor` function of class MetaTrace. The implementation is optional, and if not implemented the detail level defaults to `DNormal` for all messages.
 
-If a value for the detail level is specified in the configuration, it is used instead of the detail level specified here!
+If a value for the detail level is specified in the configuration, it is used instead of the detail level specified here.
 
 ### Documentation
 
@@ -295,7 +293,7 @@ Documentation for metrics, are provided by the function `metricsDocFor`, which r
 
 The implementation of this function is optional, and if not implemented it defaults to that the trace has no metrics.
 
-ATTENTION: As the library uses this information internally as well for other purposes, it is mandatory to implement this function for all metrics. If no comment shall be given you can provide an empty text for the metrics name.
+_ATTENTION_: As the library uses this information internally as well for other purposes, it is mandatory to implement this function for all metrics. If no comment shall be given you can provide an empty text for the metrics documentation.
 
 ## Cardano tracer
 
@@ -311,7 +309,7 @@ mkCardanoTracer :: forall msg.
   -> [Text]
   -> IO (Trace IO msg)
 
--- An example call look like this:
+-- An example call looks like this:
 startupTr <- mkCardanoTracer trBase trForward mbTrEKG ["Startup"]
 ```
 
@@ -322,7 +320,7 @@ This function constructs a tracer with all the functionality described in this d
 
 ## Configuration
 
-Before the trace can be used we need to configure it with a configuration:
+Before the trace can be used we need to provide a configuration:
 
 ```haskell
 -- | Configure this tracer with a configuration. The first argument is a state which needs to be passed, the second argument is the configuration and the last is the trace.
@@ -336,13 +334,13 @@ configureTracers :: forall a m.
   -> m ()
 ```
 
-The configuration is read from a file, but it has been decided to hard code a standard configuration for the purpose of ease of migration. This default configuration is given in the module [Cardano.Node.Tracing.DefaultTraceConfig](https://github.com/input-output-hk/cardano-node/blob/master/cardano-node/src/Cardano/Node/Tracing/DefaultTraceConfig.hs). In the config file all entries of the default configuration can be overridden. (To remove a frequency limiter, define a limiter with maxFrequency 0.0.)
+The configuration is read from a file, but it has been decided to hard code a standard configuration for the purpose of ease of migration. This default configuration is given in the module [Cardano.Node.Tracing.DefaultTraceConfig](https://github.com/input-output-hk/cardano-node/blob/master/cardano-node/src/Cardano/Node/Tracing/DefaultTraceConfig.hs). In the config file all entries of the default configuration can be overridden.
 
-The configuration file can be in JSON or YAML format. We will give the examples here in Yaml format
+The configuration file can be in JSON or YAML format. We will give the examples here in YAML format
 
-The namespaces are used for configuration values. Any value applies to all the trace messages which starts with the given namespace. To set a global value use the empty namespace "". This works down to individual messages, and the value of the more specific namespace overwrites the more general.
+The namespaces are used as configuration keys. Any value applies to all the trace messages which start with the given namespace key. To set a global value use the empty namespace "". This works down to individual messages; the value for the more specific namespace key is chosen over the more general one.
 
-The options you can set for trace messages in this way are: Severity, Detail, Limiter and Backends.
+The options you can set for trace messages in this way are: `severity`, `detail`, `limiter` and `backends`.
 
 ### Configuring Severity
 
@@ -373,7 +371,7 @@ Forge.Loop.AdoptedBlock:
     detail: DDetailed
 ```
 
-Other options would be DMinimal and DMaximum. This has only an effect on messages which support the representation in different ways.
+Other options would be `DMinimal`, `DNormal`, `DDetailed` and `DMaximum`. This has only an effect on messages which support the representation in different ways. The default value is `DNormal`.
 
 ### Configuring Frequency limiting
 
@@ -385,7 +383,9 @@ ChainDB.AddBlockEvent.AddedBlockToQueue:
     maxFrequency: 2.0
 ```
 
-The activity of limiters will be written in the traces as well. It will write a StartLimiting message with the limiter name, when the limiter starts. It will write a RememberLimiting message every 10 seconds with the limiter name and the number of suppressed messages so far. Finally it will write a StopLimiting message with the limiter name and the total number of suppressed messages, when the limiter is deactivated through a lower number of arriving messages.
+The activity of limiters will be written to the traces as well. It will write a `StartLimiting` message with the limiter name, when the limiter starts. It will write a `RememberLimiting` message every 10 seconds with the limiter name and the number of suppressed messages so far. Finally it will write a `StopLimiting` message with the limiter name and the total number of suppressed messages, when the limiter is deactivated through a lower number of arriving messages.
+
+To remove a frequency limiter from the hardcoded configuration, define a limiter with maxFrequency 0.0.
 
 ### Configuring Backends
 
@@ -393,26 +393,22 @@ Specify the backends the messages are routed to.
 
 ```yaml
 "":
-    # Keep this
-    severity: Notice
-    # And this
-    detail: DNormal
-    # And specify a list of backends to use
+    # Specify a list of backends to use
     backends:
       - Stdout MachineFormat
       - EKGBackend
       - Forwarder
 ```
 
-These are all the backends currently supported. With Stdout you have the
-options MachineFormat or HumanFormatColoured/HumanFormatUncoloured.
+These are all the backends currently supported. With `Stdout` you have the
+options `MachineFormat` or `HumanFormatColoured` or `HumanFormatUncoloured`.
 If messages don't support representation in HumanFormat* they are shown in MachineFormat anyway.
 
-Forwarder means that messages are send to cardano-tracer
+Forwarder means that messages are send to `cardano-tracer`.
 
 ## Reconfiguration
 
-The trace-dispatcher library allows tracer-reconfiguration at runtime without a
+The trace-dispatcher library allows tracer reconfiguration at runtime without a
 restart of the node. However, for a while both tracing systems will be present in parallel. In this transition time new tracing will for technical reason have a restricted functionality, so that the reconfiguration of a running node is currently not available.
 
 ## Special tracers
@@ -445,6 +441,22 @@ As always in the world of contravariance, the hook function has to be read rever
 so a trace of type msg is transformed to a type msg1. Of course you can use this hook
 mechanism as well for transformations and aggregations which don't change the type, so that msg and msg1 are the same type.
 
+### LoggingContext
+
+Behind the scenes any trace message is orchestrated with a logging context, which collects
+meta information about the specific message based on the type classes and the configuration.
+
+```haskell
+-- | Context any log message carries
+data LoggingContext = LoggingContext {
+    lcNSInner   :: [Text]
+  , lcNSPrefix  :: [Text]
+  , lcSeverity  :: Maybe SeverityS
+  , lcPrivacy   :: Maybe Privacy
+  , lcDetails   :: Maybe DetailLevel
+  }
+```
+
 ### Fold-based aggregation
 
 If aggregated information from multiple consecutive messages is needed the following fold functions can be used:
@@ -476,25 +488,28 @@ data Stats = Stats {
     sSum     :: Double
     }
 
-calculateS :: Stats -> Double -> m Stats
-calculateS Stats{..} val = pure $ Stats val (sSum + val)
+calculateS :: Stats -> LoggingContext -> Double -> m Stats
+calculateS Stats{..} _ val = pure $ Stats val (sSum + val)
 ```
 
 Then we can define the aggregation  with the procedure foldMTraceM in the
 following way, and it will output the Stats:
 
 ```haskell
-  aggroTracer <- foldMTraceM calculateS (Stats 0.0 0.0) exTracer
+  tracer <- foldMTraceM
+              calculateS
+              (Stats 0.0 0.0)
+              (contramap unfold aggregationTracer)
 ```
 ### Trace routing
 
 To send the message of a trace to different tracers depending on some criteria use the following function
 
+```haskell
 -- | Allows to route to different tracers, based on the message being processed.
 --   The second argument must mappend all possible traces of the first
 --   argument to one . This is required for the configuration!
 
-```haskell
 routingTrace :: Monad m => (a -> m (Trace m a)) -> Trace m a -> m (Trace m a)
 let resTrace = routingTrace routingf (tracer1 <> tracer2)
   where
@@ -503,6 +518,7 @@ let resTrace = routingTrace routingf (tracer1 <> tracer2)
 ```
 
 The second argument must mappend all traces used in the routing trace function to one trace. This is required for the configuration. We could have construct a more secure interface by having a map of values to tracers, but the ability for full pattern matching outweigh this disadvantage in our view.
+
 In the following example we send the messages of one trace to two tracers simultaneously:
 
 ```haskell
@@ -573,9 +589,6 @@ mkDataPointTracer :: forall dp. ToJSON dp
   => Trace IO DataPoint
   -> (dp -> [Text])
   -> IO (Trace IO dp)
-mkDataPointTracer trDataPoint namesFor = do
-    let tr = NT.contramap DataPoint trDataPoint
-    pure $ withNamesAppended namesFor tr
 ```
 
 ## References
@@ -583,11 +596,11 @@ mkDataPointTracer trDataPoint namesFor = do
 This is a document which is regenerated periodically and documents all trace-messages,  metrics and data-points in cardano-node. It as well displays the handling of these
 messages with the current default configuration:
 
-[Gernerated Cardano Trace Documentation](https://github.com/input-output-hk/cardano-node/blob/master/doc/new-tracing/tracers_doc_generated.md)
+[Generated Cardano Trace Documentation](https://github.com/input-output-hk/cardano-node/blob/master/doc/new-tracing/tracers_doc_generated.md)
 
 For a quick start into new tracing see the document:
 
-[New Tracing Quickstart](https://github.com/input-output-hk/cardano-node/blob/master/doc/New%20Tracing%20Quickstart.md)
+[New Tracing Quickstart](https://github.com/input-output-hk/cardano-node/blob/master/doc/new-tracing/New%20Tracing%20Quickstart.md)
 
 This document describes a separate service for logging and monitoring Cardano nodes:
 

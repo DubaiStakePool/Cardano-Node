@@ -100,8 +100,8 @@ instance Monad m => Monoid (Trace m a) where
     mempty  = Trace T.nullTracer
 
 -- | A unique identifier for every message, composed of text
--- A namespace can as well appear with the tracer name (e.g. "ChainDB.OpenEvent.OpenedDB"),
--- or more prefixes, in this moment it is a NamespaceOuter is used
+--   a prefix and an inner part. The prefix is set from
+--   the tracerPrefix argument of mkCardanoTracer
 data Namespace a = Namespace {
     nsPrefix :: [Text]
   , nsInner :: [Text]}
