@@ -559,6 +559,7 @@ module Cardano.Api (
     ConsensusBlockForEra,
     EraInMode(..),
     toEraInMode,
+    eraInModeToEra,
     LocalNodeClientProtocols(..),
     LocalNodeClientParams(..),
     mkLocalNodeClientParams,
