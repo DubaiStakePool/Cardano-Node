@@ -14,16 +14,20 @@ module Cardano.CLI.Shelley.Run.Transaction
   , renderShelleyTxCmdError
   , runTransactionCmd
   , readFileTx
-  , readProtocolParametersSourceSpec
   , toTxOutInAnyEra
-  ) where
 
+  -- * Protocol Parameters
+  , ProtocolParamsError(..)
+  , renderProtocolParamsError
+  , readProtocolParametersSourceSpec
+  ) where
+import Cardano.CLI.Shelley.Run.Query (executeQueryProtocolParameters)
 import           Control.Monad (forM, forM_, void)
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Control.Monad.Trans (MonadTrans (..))
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, hoistMaybe, left,
-                   newExceptT, onLeft, onNothing)
+                   newExceptT, onLeft, onNothing, handleIOExceptT)
 import           Data.Aeson.Encode.Pretty (encodePretty)
 import           Data.Bifunctor (Bifunctor (..))
 import qualified Data.ByteString.Char8 as BS
@@ -58,6 +62,8 @@ import           Cardano.CLI.Types
 
 import           Ouroboros.Consensus.Cardano.Block (EraMismatch (..))
 import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as Net.Tx
+import qualified Data.Aeson as Aeson
+import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 
 {- HLINT ignore "Use let" -}
 
@@ -1457,4 +1463,41 @@ onlyInShelleyBasedEras notImplMsg (InAnyCardanoEra era x) =
       LegacyByronEra       -> left (ShelleyTxCmdNotImplemented notImplMsg)
       ShelleyBasedEra era' -> return (InAnyShelleyBasedEra era' x)
 
+
+
+-- FIXME: move to a better place
+-- Protocol Parameters
+data ProtocolParamsError
+  = ProtocolParamsErrorFile (FileError ())
+  | ProtocolParamsErrorJSON !FilePath !Text
+  | ProtocolParamsErrorGenesis !ShelleyGenesisCmdError
+  | ProtocolParamsErrorQuery !ShelleyQueryCmdError
+
+renderProtocolParamsError :: ProtocolParamsError -> Text
+renderProtocolParamsError (ProtocolParamsErrorFile fileErr) =
+  Text.pack $ displayError fileErr
+renderProtocolParamsError (ProtocolParamsErrorJSON fp jsonErr) =
+  "Error while decoding the protocol parameters at: " <> Text.pack fp <> " Error: " <> jsonErr
+renderProtocolParamsError (ProtocolParamsErrorGenesis err) =
+  Text.pack $ displayError  err
+renderProtocolParamsError (ProtocolParamsErrorQuery _err) =
+  undefined
+
+readProtocolParametersSourceSpec :: ProtocolParamsSourceSpec
+                                 -> ExceptT ProtocolParamsError IO ProtocolParameters
+readProtocolParametersSourceSpec (ParamsFromGenesis (GenesisFile f)) =
+  fromShelleyPParams . sgProtocolParams
+    <$> firstExceptT ProtocolParamsErrorGenesis (readShelleyGenesisWithDefault f id)
+readProtocolParametersSourceSpec (ParamsFromFile f) = readProtocolParameters f
+readProtocolParametersSourceSpec ParamsFromNode = firstExceptT (ProtocolParamsErrorQuery) $
+  executeQueryProtocolParameters undefined undefined
+
+--TODO: eliminate this and get only the necessary params, and get them in a more
+-- helpful way rather than requiring them as a local file.
+readProtocolParameters :: ProtocolParamsFile
+                       -> ExceptT ProtocolParamsError IO ProtocolParameters
+readProtocolParameters (ProtocolParamsFile fpath) = do
+  pparams <- handleIOExceptT (ProtocolParamsErrorFile . FileIOError fpath) $ LBS.readFile fpath
+  firstExceptT (ProtocolParamsErrorJSON fpath . Text.pack) . hoistEither $
+    Aeson.eitherDecode' pparams
 

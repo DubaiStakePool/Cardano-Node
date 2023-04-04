@@ -24,6 +24,7 @@ module Cardano.CLI.Shelley.Run.Query
   , mergeDelegsAndRewards
   , percentage
   , executeQuery
+  , executeQueryProtocolParameters
   ) where
 
 import           Cardano.Api
@@ -203,12 +204,12 @@ runQueryCmd cmd =
     QueryTxMempool consensusModeParams network op mOutFile ->
       runQueryTxMempool consensusModeParams network op mOutFile
 
-runQueryProtocolParameters
+-- FIXME: not sure if that's the good name for this function
+executeQueryProtocolParameters
   :: AnyConsensusModeParams
   -> NetworkId
-  -> Maybe OutputFile
-  -> ExceptT ShelleyQueryCmdError IO ()
-runQueryProtocolParameters (AnyConsensusModeParams cModeParams) network mOutFile = do
+  -> ExceptT ShelleyQueryCmdError IO ProtocolParameters
+executeQueryProtocolParameters (AnyConsensusModeParams cModeParams) network = do
   SocketPath sockPath <- lift readEnvSocketPath & onLeft (left . ShelleyQueryCmdEnvVarSocketErr)
 
   let localNodeConnInfo = LocalNodeConnectInfo cModeParams network sockPath
@@ -229,7 +230,16 @@ runQueryProtocolParameters (AnyConsensusModeParams cModeParams) network mOutFile
           & onLeft (left . ShelleyQueryCmdUnsupportedNtcVersion)
           & onLeft (left . ShelleyQueryCmdEraMismatch)
 
-  writeProtocolParameters mOutFile =<< except (join (first ShelleyQueryCmdAcquireFailure result))
+  except (join (first ShelleyQueryCmdAcquireFailure result))
+
+runQueryProtocolParameters
+  :: AnyConsensusModeParams
+  -> NetworkId
+  -> Maybe OutputFile
+  -> ExceptT ShelleyQueryCmdError IO ()
+runQueryProtocolParameters cModeParams network mOutFile =
+  executeQueryProtocolParameters cModeParams network
+    >>= writeProtocolParameters mOutFile
 
  where
   writeProtocolParameters
