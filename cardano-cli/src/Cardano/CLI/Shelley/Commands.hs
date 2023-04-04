@@ -265,6 +265,8 @@ data ProtocolParamsSourceSpec
   | ParamsFromFile !ProtocolParamsFile
     -- ^ Obtain protocol parameters from a file structured by the
     --   'cardano-api' 'ProtocolParameters' data type.
+  | ParamsFromNode
+    -- ^ Query the node for the current 'ProtocolParameters'
   deriving Show
 
 renderTransactionCmd :: TransactionCmd -> Text
