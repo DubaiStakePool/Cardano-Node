@@ -753,6 +753,8 @@ pTransaction =
   pTransactionBuildRaw :: Parser TransactionCmd
   pTransactionBuildRaw =
     TxBuildRaw <$> pCardanoEra
+               <*> pConsensusModeParams
+               <*> pNetworkId
                <*> optional pScriptValidity
                <*> some (pTxIn ManualBalance)
                <*> many pReadOnlyReferenceTxIn
@@ -807,7 +809,9 @@ pTransaction =
   pTransactionCalculateMinFee :: Parser TransactionCmd
   pTransactionCalculateMinFee =
     TxCalculateMinFee
-      <$> pTxBodyFile Input
+      <$> pConsensusModeParams
+      <*> pNetworkId
+      <*> pTxBodyFile Input
       <*> optional pNetworkId
       <*> pProtocolParamsSourceSpec
       <*> pTxInCount

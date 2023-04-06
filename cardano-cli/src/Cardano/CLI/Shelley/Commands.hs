@@ -157,6 +157,8 @@ renderKeyCmd cmd =
 data TransactionCmd
   = TxBuildRaw
       AnyCardanoEra
+      AnyConsensusModeParams
+      NetworkId
       (Maybe ScriptValidity) -- ^ Mark script as expected to pass or fail validation
       [(TxIn, Maybe (ScriptWitnessFiles WitCtxTxIn))]
       -- ^ Transaction inputs with optional spending scripts
@@ -237,8 +239,10 @@ data TransactionCmd
   | TxSubmit AnyConsensusModeParams NetworkId FilePath
   | TxMintedPolicyId ScriptFile
   | TxCalculateMinFee
+      AnyConsensusModeParams
+      NetworkId
       TxBodyFile
-      (Maybe NetworkId)
+      (Maybe NetworkId) -- FIXME redundant - remove
       ProtocolParamsSourceSpec
       TxInCount
       TxOutCount
