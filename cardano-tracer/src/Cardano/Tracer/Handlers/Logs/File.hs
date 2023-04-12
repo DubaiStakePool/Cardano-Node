@@ -1,5 +1,4 @@
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Tracer.Handlers.Logs.File
@@ -9,15 +8,10 @@ module Cardano.Tracer.Handlers.Logs.File
 import           Control.Concurrent.Extra (Lock, withLock)
 import           Control.Monad (unless)
 import           Control.Monad.Extra (ifM)
-import           Data.Aeson (Value, decodeStrict', pairs, (.=))
-import           Data.Aeson.Encoding (encodingToLazyByteString)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
-import           Data.Char (isDigit)
 import           Data.Maybe (mapMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import           Data.Time.Format (defaultTimeLocale, formatTime)
 import           System.Directory (createDirectoryIfMissing, doesDirectoryExist, makeAbsolute)
 import           System.Directory.Extra (listFiles)
 import           System.FilePath ((</>))
@@ -90,38 +84,12 @@ getPathToCurrentlog nodeName rootDirAbs format =
     createEmptyLog subDirForLogs format
 
 traceObjectToText :: TraceObject -> Maybe T.Text
-traceObjectToText TraceObject{toHuman, toHostname, toNamespace, toSeverity, toThreadId, toTimestamp} =
+traceObjectToText TraceObject{toHuman} =
   case toHuman of
     Nothing -> Nothing
-    Just msgForHuman -> Just $
-      "[" <> host <> ":" <> name <> ":" <> sev <> ":" <> thId <> "] [" <> time <> "] "
-      <> msgForHuman <> nl
- where
-  host = T.pack toHostname
-  name = mkName toNamespace
-  sev  = T.pack $ show toSeverity
-  thId = T.filter isDigit toThreadId
-  time = T.pack $ formatTime defaultTimeLocale "%F %T%2Q %Z" toTimestamp
-
-mkName :: [T.Text] -> T.Text
-mkName []    = "noname"
-mkName l = T.intercalate "." l
+    Just msgForHuman -> Just $ msgForHuman <> nl
 
 traceObjectToJSON :: TraceObject -> Maybe T.Text
-traceObjectToJSON TraceObject{toMachine, toTimestamp, toNamespace, toHostname, toSeverity, toThreadId} =
-  case toMachine of
-    Nothing  -> Nothing
-    Just msg -> Just $ toAsJSON msg <> nl
- where
-  toAsJSON msgForMachine =
-      TE.decodeUtf8
-    . LBS.toStrict
-    . encodingToLazyByteString
-    . pairs $ "at"     .= formatTime defaultTimeLocale "%F %H:%M:%S%4QZ" toTimestamp
-           <> "ns"     .= mkName toNamespace
-           <> "data"   .= case decodeStrict' $ TE.encodeUtf8 msgForMachine of
-                            Just (v :: Value) -> v
-                            Nothing -> ""
-           <> "sev"    .= T.pack (show toSeverity)
-           <> "thread" .= T.filter isDigit toThreadId
-           <> "host"   .= T.pack toHostname
+traceObjectToJSON TraceObject{toMachine} =
+  Just $ toMachine <> nl
+
