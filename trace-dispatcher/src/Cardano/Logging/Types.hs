@@ -66,11 +66,12 @@ import qualified Data.HashMap.Strict as HM
 import           Data.IORef
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import           Data.Time (UTCTime)
+
 
 
 import           Data.Text (Text, intercalate, pack, singleton, unpack)
 import           Data.Text.Lazy (toStrict)
-import           Data.Time (UTCTime)
 import           GHC.Generics
 import           Network.HostName (HostName)
 
@@ -289,17 +290,6 @@ instance Show SeverityF where
   show (SeverityF (Just s)) = show s
   show (SeverityF Nothing)  = "Silence"
 
--- | Used as interface object for ForwarderTracer
-data TraceObject = TraceObject {
-    toHuman     :: Maybe Text
-  , toMachine   :: Maybe Text
-  , toNamespace :: [Text]
-  , toSeverity  :: SeverityS
-  , toDetails   :: DetailLevel
-  , toTimestamp :: UTCTime
-  , toHostname  :: HostName
-  , toThreadId  :: Text
-} deriving (Eq, Show)
 
 ----------------------------------------------------------------
 -- Configuration
@@ -321,6 +311,29 @@ data FormattedMessage =
     | FormattedForwarder TraceObject
   deriving (Eq, Show)
 
+
+data PreFormatted a = PreFormatted {
+    pfMessage    :: a
+  , pfForHuman   :: Maybe Text
+  , pfForMachine :: AE.Object
+  , pfNamespace  :: [Text]
+  , pfTimestamp  :: Text
+  , pfTime       :: UTCTime
+  , pfHostname   :: HostName
+  , pfThreadId   :: Text
+}
+
+-- | Used as interface object for ForwarderTracer
+data TraceObject = TraceObject {
+    toHuman     :: Maybe Text
+  , toMachine   :: Text
+  , toNamespace :: [Text]
+  , toSeverity  :: SeverityS
+  , toDetails   :: DetailLevel
+  , toTimestamp :: UTCTime
+  , toHostname  :: HostName
+  , toThreadId  :: Text
+} deriving (Eq, Show)
 
 -- |
 data BackendConfig =
@@ -490,20 +503,6 @@ newtype Folding a b = Folding b
 unfold :: Folding a b -> b
 unfold (Folding b) = b
 
-data PreFormatted a = PreFormatted {
-    pfMessage    :: a
-  , pfForHuman   :: Maybe Text
-  , pfForMachine :: Maybe AE.Object
-  }
-
-instance LogFormatting a => LogFormatting (PreFormatted a) where
-  forMachine dtal PreFormatted {..} =  case pfForMachine of
-                                          Nothing -> forMachine dtal pfMessage
-                                          Just obj -> obj
-  forHuman PreFormatted {..}        =  case pfForHuman of
-                                          Nothing  -> forHuman pfMessage
-                                          Just txt -> txt
-  asMetrics PreFormatted {..}       =  asMetrics pfMessage
 
 ---------------------------------------------------------------------------
 -- LogFormatting instances

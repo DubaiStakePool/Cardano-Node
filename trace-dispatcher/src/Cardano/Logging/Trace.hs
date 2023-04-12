@@ -146,11 +146,12 @@ withInnerNames (Trace tr) = Trace $
 
 -- | Sets severity for the messages in this trace
 setSeverity :: Monad m => SeverityS -> Trace m a -> Trace m a
-setSeverity s (Trace tr) = Trace $ T.contramap
-  (\ (lc, cont) -> if isJust (lcSeverity lc)
-                        then (lc, cont)
-                        else (lc {lcSeverity = Just s}, cont))
-  tr
+setSeverity s (Trace tr) = Trace $
+    T.contramap
+      (\ (lc, cont) -> if isJust (lcSeverity lc)
+                            then (lc, cont)
+                            else (lc {lcSeverity = Just s}, cont))
+      tr
 
 -- | Sets severities for the messages in this trace based on the MetaTrace class
 withSeverity :: forall m a. (Monad m, MetaTrace a) => Trace m a -> Trace m a

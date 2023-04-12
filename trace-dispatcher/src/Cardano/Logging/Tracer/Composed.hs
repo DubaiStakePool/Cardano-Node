@@ -126,23 +126,20 @@ backendsAndFormat trStdout trForward mbBackends _ =
                   [EKGBackend, Forwarder, Stdout HumanFormatColoured]
                   mbBackends
   in do
-    mbForwardTrace <- if Forwarder `L.elem` backends'
-                        then fmap (Just . filterTraceByPrivacy (Just Public))
-                              (forwardFormatter Nothing trForward)
-                        else pure Nothing
-    mbStdoutTrace  <-  if Stdout HumanFormatColoured `L.elem` backends'
-                        then fmap Just
-                            (humanFormatter True Nothing trStdout)
-                        else if Stdout HumanFormatUncoloured `L.elem` backends'
-                          then fmap Just
-                              (humanFormatter False Nothing trStdout)
-                          else if Stdout MachineFormat `L.elem` backends'
-                            then fmap Just
-                              (machineFormatter Nothing trStdout)
-                            else pure Nothing
+    let mbForwardTrace  = if Forwarder `L.elem` backends'
+                            then Just $ filterTraceByPrivacy (Just Public)
+                                (forwardFormatter' Nothing trForward)
+                            else Nothing
+        mbStdoutTrace   | Stdout HumanFormatColoured `L.elem` backends'
+                        = Just (humanFormatter' True Nothing trStdout)
+                        | Stdout HumanFormatUncoloured `L.elem` backends'
+                        = Just (humanFormatter' False Nothing trStdout)
+                        | Stdout MachineFormat `L.elem` backends'
+                        = Just (machineFormatter' Nothing trStdout)
+                        | otherwise = Nothing
     case mbForwardTrace <> mbStdoutTrace of
       Nothing -> pure $ Trace NT.nullTracer
-      Just tr -> pure $ preFormatted backends' tr
+      Just tr -> preFormatted backends' tr
 
 -- A basic ttracer just for metrics
 mkMetricsTracer :: Maybe (Trace IO FormattedMessage) -> Trace IO FormattedMessage

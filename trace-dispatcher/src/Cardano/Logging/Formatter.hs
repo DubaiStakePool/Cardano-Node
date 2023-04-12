@@ -2,15 +2,17 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Logging.Formatter (
-    humanFormatter
-  , metricsFormatter
-  , machineFormatter
-  , forwardFormatter
+    metricsFormatter
   , preFormatted
+  , forwardFormatter
+  , forwardFormatter'
+  , machineFormatter
+  , machineFormatter'
+  , humanFormatter
+  , humanFormatter'
 ) where
 
 import qualified Control.Tracer as T
@@ -21,11 +23,11 @@ import qualified Data.ByteString.Lazy as BS
 import           Data.Functor.Contravariant
 import           Data.List (intersperse)
 import           Data.Maybe (fromMaybe)
-import           Data.Text (Text, pack, replace, stripPrefix)
+import           Data.Text (Text, pack, stripPrefix)
 import           Data.Text.Encoding (decodeUtf8)
 import           Data.Text.Lazy (toStrict)
 import           Data.Text.Lazy.Builder as TB
-import           Data.Time (defaultTimeLocale, formatTime, getCurrentTime)
+import           Data.Time (UTCTime, defaultTimeLocale, formatTime, getCurrentTime)
 
 import           Cardano.Logging.Types
 import           Control.Concurrent (myThreadId)
@@ -39,225 +41,245 @@ metricsFormatter
   => Text
   -> Trace m FormattedMessage
   -> Trace m a
-metricsFormatter application (Trace tr) =
-  let trr = mkTracer
-  in Trace (T.arrow trr)
- where
-    mkTracer = T.emit $
-      \ case
+metricsFormatter application (Trace tr) = Trace $
+    T.contramap
+      (\ case
         (lc, Right v) ->
           let metrics = asMetrics v
-          in T.traceWith tr (lc { lcNSPrefix = application : lcNSPrefix lc}
-                            , Right (FormattedMetrics metrics))
+          in (lc { lcNSPrefix = application : lcNSPrefix lc}
+                 , Right (FormattedMetrics metrics))
         (lc, Left ctrl) ->
-          T.traceWith tr (lc { lcNSPrefix = application : lcNSPrefix lc}
-                            , Left ctrl)
-
--- | Format this trace as TraceObject for the trace forwarder
-forwardFormatter
-  :: forall a m . (LogFormatting a, MonadIO m)
-  => Maybe Text
-  -> Trace m FormattedMessage
-  -> m (Trace m a)
-forwardFormatter condApplication (Trace tr) = do
-  hn <- liftIO getHostName
-  let trr = mkTracer hn
-  pure $ Trace (T.arrow trr)
- where
-    mkTracer hn = T.emit $
-      \ case
-        (lc, Right v) -> do
-          thid <- liftIO myThreadId
-          time <- liftIO getCurrentTime
-          let fh = forHuman v
-              details = fromMaybe DNormal (lcDetails lc)
-              fm = forMachine details v
-              nlc = lc { lcNSPrefix = case condApplication of
-                                                  Just app -> app : lcNSPrefix lc
-                                                  Nothing  -> lcNSPrefix lc}
-              to = TraceObject {
-                      toHuman     = if fh == "" then Nothing else Just fh
-                    , toMachine   = if fm == mempty then Nothing else
-                                    Just
-                                      $ replace "\\" "\\\\"
-                                      $ decodeUtf8 (BS.toStrict (AE.encode fm))
-                    , toNamespace = lcNSPrefix nlc ++ lcNSInner lc
-                    , toSeverity  = fromMaybe Info (lcSeverity lc)
-                    , toDetails   = fromMaybe DNormal (lcDetails lc)
-                    , toTimestamp = time
-                    , toHostname  = hn
-                    , toThreadId  = (pack . show) thid
-                  }
-          T.traceWith tr ( nlc
-                         , Right (FormattedForwarder to))
-        (lc, Left ctrl) -> do
-          T.traceWith tr (lc { lcNSPrefix = case condApplication of
-                                              Just app -> app : lcNSPrefix lc
-                                              Nothing  -> lcNSPrefix lc}
-                            , Left ctrl)
-
--- | Format this trace for human readability
--- The boolean value tells, if this representation is for the console and should be colored
--- The text argument gives the application name which is prepended to the namespace
-humanFormatter
-  :: forall a m . (LogFormatting a, MonadIO m)
-  => Bool
-  -> Maybe Text
-  -> Trace m FormattedMessage
-  -> m (Trace m a)
-humanFormatter withColor condApplication (Trace tr) = do
-  hn <- liftIO getHostName
-  let trr = mkTracer hn
-  pure $ Trace (T.arrow trr)
- where
-    mkTracer hn = T.emit $
-      \ case
-        (lc, Right v) -> do
-          let fh = forHuman v
-          text <- liftIO $ formatContextHuman withColor hn condApplication lc fh
-          T.traceWith tr (lc { lcNSPrefix = case condApplication of
-                                              Just app -> app : lcNSPrefix lc
-                                              Nothing  -> lcNSPrefix lc}
-                             , Right (FormattedHuman withColor text))
-        (lc, Left ctrl) -> do
-          T.traceWith tr (lc { lcNSPrefix = case condApplication of
-                                              Just app -> app : lcNSPrefix lc
-                                              Nothing  -> lcNSPrefix lc}
-                             , Left ctrl)
-
-formatContextHuman ::
-     Bool
-  -> String
-  -> Maybe Text
-  -> LoggingContext
-  -> Text
-  -> IO Text
-formatContextHuman withColor hostname condApplication LoggingContext {..}  txt = do
-  thid <- myThreadId
-  time <- getCurrentTime
-  let severity = fromMaybe Info lcSeverity
-      tid      = fromMaybe ((pack . show) thid)
-                    ((stripPrefix "ThreadId " . pack . show) thid)
-      ts       = fromString $ formatTime defaultTimeLocale "%F %H:%M:%S%4Q" time
-      ns       = colorBySeverity
-                    withColor
-                    severity
-                    $ fromString hostname
-                      <> singleton ':'
-                      <> mconcat (intersperse (singleton '.')
-                          (case condApplication of
-                            Just app -> map fromText (app : lcNSPrefix ++ lcNSInner)
-                            Nothing  -> map fromText (lcNSPrefix ++ lcNSInner)))
-
-      tadd     = fromText " ("
-                  <> fromString (show severity)
-                  <> singleton ','
-                  <> fromText tid
-                  <> fromText ") "
-  pure $ toStrict
-          $ toLazyText
-            $ squareBrackets ts
-              <> singleton ' '
-              <> squareBrackets ns
-              <> tadd
-              <> fromText txt
-  where
-    squareBrackets :: Builder -> Builder
-    squareBrackets b = singleton '[' <> b <> singleton ']'
-
--- | Format this trace for machine readability
--- The detail level give a hint to the formatter
--- The text argument gives the application name which is prepended to the namespace
-machineFormatter
-  :: forall a m . (LogFormatting a, MonadIO m)
-  => Maybe Text
-  -> Trace m FormattedMessage
-  -> m (Trace m a)
-machineFormatter condApplication (Trace tr) = do
-  hn <- liftIO getHostName
-  let trr = mkTracer hn
-  pure $ Trace (T.arrow trr)
- where
-    mkTracer hn = T.emit $
-      \case
-        (lc, Right v) -> do
-          let detailLevel = fromMaybe DNormal (lcDetails lc)
-          obj <- liftIO $ formatContextMachine hn condApplication lc (forMachine detailLevel v)
-          T.traceWith tr (lc { lcNSPrefix = case condApplication of
-                                              Just app -> app : lcNSPrefix lc
-                                              Nothing  -> lcNSPrefix lc}
-                         , Right (FormattedMachine (decodeUtf8 (BS.toStrict
-                                (AE.encodingToLazyByteString obj)))))
-        (lc, Left c) -> do
-          T.traceWith tr (lc { lcNSPrefix = case condApplication of
-                                              Just app -> app : lcNSPrefix lc
-                                              Nothing  -> lcNSPrefix lc}
-                         , Left c)
-
-formatContextMachine ::
-     String
-  -> Maybe Text
-  -> LoggingContext
-  -> AE.Object
-  -> IO AE.Encoding
-formatContextMachine hostname condApplication LoggingContext {..} obj = do
-  thid <- myThreadId
-  time <- getCurrentTime
-  let severity = (pack . show) (fromMaybe Info lcSeverity)
-      tid      = fromMaybe ((pack . show) thid)
-                    ((stripPrefix "ThreadId " . pack . show) thid)
-      ns       = mconcat (intersperse (singleton '.')
-                     (case condApplication of
-                       Just app -> map fromText ((app : lcNSPrefix) ++ lcNSInner)
-                       Nothing  -> map fromText (lcNSPrefix ++ lcNSInner)))
-      ts       = pack $ formatTime defaultTimeLocale "%F %H:%M:%S%4QZ" time
-  pure $ AE.pairs $    "at"      .= ts
-                    <> "ns"      .= toStrict (toLazyText ns)
-                    <> "data"    .= obj
-                    <> "sev"     .= severity
-                    <> "thread"  .= tid
-                    <> "host"    .= hostname
+             (lc { lcNSPrefix = application : lcNSPrefix lc}
+                 , Left ctrl))
+      tr
 
 
 -- | Transform this trace to a preformatted message, so that double serialization
 -- is avoided
 preFormatted ::
   (  LogFormatting a
-  ,  Monad m)
+  ,  Monad m
+  ,  MonadIO m)
   => [BackendConfig]
   -> Trace m (PreFormatted a)
-  -> Trace m a
-preFormatted backends tr@(Trace tr')=
-  if Forwarder `elem` backends
-    then if elem (Stdout HumanFormatUncoloured) backends
-            || elem (Stdout HumanFormatColoured) backends
-      then contramap (\msg -> PreFormatted msg (Just (forHuman msg)) Nothing) tr
-      else if Stdout MachineFormat `elem` backends
-        then Trace $ T.contramap
-              (\case
-                  (lc, Right msg) ->
-                    let dtal = fromMaybe DNormal (lcDetails lc)
-                    in (lc, Right (PreFormatted msg Nothing
-                                    (Just (forMachine dtal msg))))
-                  (lc, Left ctrl) -> (lc, Left ctrl))
-              tr'
-        else contramap (\msg -> PreFormatted msg Nothing Nothing) tr
-    else contramap (\msg -> PreFormatted msg Nothing Nothing) tr
+  -> m (Trace m a)
+preFormatted backends' (Trace tr) = do
+  hostname <- liftIO getHostName
+  pure $ Trace $ T.arrow $ T.emit $
+    \ case
+      (lc, Right msg) -> do
+        time     <- liftIO getCurrentTime
+        threadId <- liftIO myThreadId
+        let threadText = fromMaybe
+                            ((pack . show) threadId)
+                            ((stripPrefix "ThreadId " . pack . show) threadId)
+            timestamp = time
+            details = fromMaybe DNormal (lcDetails lc)
+            condForHuman = if elem (Stdout HumanFormatUncoloured) backends'
+                          || elem (Stdout HumanFormatColoured) backends'
+                          || elem Forwarder backends'
+                          then Just $ forHuman msg
+                          else Nothing
+            machineFormatted = forMachine details msg
+        T.traceWith tr (lc, Right (PreFormatted
+                            { pfMessage = msg
+                            , pfForHuman = condForHuman
+                            , pfForMachine = machineFormatted
+                            , pfTimestamp = timeFormatted timestamp
+                            , pfTime = timestamp
+                            , pfNamespace = lcNSPrefix lc ++ lcNSInner lc
+                            , pfHostname = hostname
+                            , pfThreadId = threadText
+                            }))
+      (lc, Left ctrl) ->
+        T.traceWith tr (lc, Left ctrl)
+
+-- | Format this trace as TraceObject for the trace forwarder
+forwardFormatter'
+  :: forall a m .
+     MonadIO m
+  => Maybe Text
+  -> Trace m FormattedMessage
+  -> Trace m (PreFormatted a)
+forwardFormatter' condApplication (Trace tr) = Trace $
+  contramap
+    (\ case
+      (lc, Right v) ->
+            let ns' = case condApplication of
+                                  Just app -> app : pfNamespace v
+                                  Nothing -> pfNamespace v
+                ns'' = mconcat (intersperse (singleton '.')
+                                    (map fromText ns'))
+                nsText = toStrict (toLazyText ns'')
+                machineObj = AE.pairs $
+                                  "at"       .= pfTimestamp v
+                                <> "ns"      .= nsText
+                                <> "data"    .= pfForMachine v
+                                <> "sev"     .= fromMaybe Info (lcSeverity lc)
+                                <> "thread"  .= pfThreadId v
+                                <> "host"    .= pfHostname v
+                forMachine' = decodeUtf8
+                              $ BS.toStrict
+                                $ AE.encodingToLazyByteString machineObj
+                to = TraceObject {
+                    toHuman     = pfForHuman v
+                  , toMachine   = forMachine'
+                  , toNamespace = ns'
+                  , toSeverity  = fromMaybe Info (lcSeverity lc)
+                  , toDetails   = fromMaybe DNormal (lcDetails lc)
+                  , toTimestamp = pfTime v
+                  , toHostname  = pfHostname v
+                  , toThreadId  = pfThreadId v
+                }
+            in (lc, Right (FormattedForwarder to))
+      (lc, Left ctrl) ->
+        (lc { lcNSPrefix = case condApplication of
+                                            Just app -> app : lcNSPrefix lc
+                                            Nothing  -> lcNSPrefix lc}
+            , Left ctrl))
+      tr
+
+-- | Format this trace as TraceObject for the trace forwarder
+machineFormatter'
+  :: forall a m .
+     MonadIO m
+  => Maybe Text
+  -> Trace m FormattedMessage
+  -> Trace m (PreFormatted a)
+machineFormatter' condApplication (Trace tr) = Trace $
+  contramap
+    (\ case
+      (lc, Right v) ->
+            let ns' = case condApplication of
+                                  Just app -> app : pfNamespace v
+                                  Nothing -> pfNamespace v
+                ns'' = mconcat (intersperse (singleton '.')
+                                    (map fromText ns'))
+                nsText = toStrict (toLazyText ns'')
+                machineObj = AE.pairs $
+                                  "at"       .= pfTimestamp v
+                                <> "ns"      .= nsText
+                                <> "data"    .= pfForMachine v
+                                <> "sev"     .= fromMaybe Info (lcSeverity lc)
+                                <> "thread"  .= pfThreadId v
+                                <> "host"    .= pfHostname v
+                forMachine' = decodeUtf8
+                               $ BS.toStrict
+                                 $ AE.encodingToLazyByteString machineObj
+            in (lc, Right (FormattedMachine forMachine'))
+      (lc, Left ctrl) ->
+        (lc { lcNSPrefix = case condApplication of
+                                            Just app -> app : lcNSPrefix lc
+                                            Nothing  -> lcNSPrefix lc}
+            , Left ctrl))
+      tr
+
+-- | Format this trace as TraceObject for the trace forwarder
+humanFormatter'
+  :: forall a m .
+     MonadIO m
+  => Bool
+  -> Maybe Text
+  -> Trace m FormattedMessage
+  -> Trace m (PreFormatted a)
+humanFormatter' withColor condApplication (Trace tr) =
+  Trace $
+      contramap
+        (\ case
+          (lc, Right v) ->
+              let ns' = case condApplication of
+                                    Just app -> app : pfNamespace v
+                                    Nothing -> pfNamespace v
+                  ns'' = mconcat (intersperse (singleton '.')
+                                      (map fromText ns'))
+                  severity' = fromMaybe Info (lcSeverity lc)
+                  ns       = colorBySeverity
+                                withColor
+                                severity'
+                                $ fromString (pfHostname v)
+                                  <> singleton ':'
+                                  <> ns''
+                  tadd     = fromText " ("
+                              <> fromString (show severity')
+                              <> singleton ','
+                              <> fromText (pfThreadId v)
+                              <> fromText ") "
+                  forHuman' = fromMaybe
+                                (decodeUtf8
+                                  $ BS.toStrict
+                                    $ AE.encodingToLazyByteString
+                                        $ AE.pairs ("data"    .= pfForMachine v))
+                                (pfForHuman v)
+                  forHuman'' = toStrict
+                                $ toLazyText
+                                  $ squareBrackets (fromText (pfTimestamp v))
+                                    <> singleton ' '
+                                    <> squareBrackets ns
+                                    <> tadd
+                                    <> fromText forHuman'
+                  in (lc, Right (FormattedHuman withColor forHuman''))
+          (lc, Left ctrl) ->
+            (lc { lcNSPrefix = case condApplication of
+                                                Just app -> app : lcNSPrefix lc
+                                                Nothing  -> lcNSPrefix lc}
+                , Left ctrl))
+          tr
+
+squareBrackets :: Builder -> Builder
+squareBrackets b = singleton '[' <> b <> singleton ']'
 
 -- | Color a text message based on `Severity`. `Error` and more severe errors
 -- are colored red, `Warning` is colored yellow, and all other messages are
 -- rendered in the default color.
 colorBySeverity :: Bool -> SeverityS -> Builder -> Builder
-colorBySeverity withColor severity msg = case severity of
-  Emergency -> red msg
-  Alert     -> red msg
-  Critical  -> red msg
-  Error     -> red msg
-  Warning   -> yellow msg
-  _         -> msg
+colorBySeverity withColor severity' msg =
+    case severity' of
+      Emergency -> red msg
+      Alert     -> red msg
+      Critical  -> red msg
+      Error     -> red msg
+      Warning   -> yellow msg
+      _         -> msg
   where
     red = colorize "31"
     yellow = colorize "33"
     colorize c s
       | withColor = "\ESC["<> c <> "m" <> s <> "\ESC[0m"
       | otherwise = s
+
+timeFormatted :: UTCTime -> Text
+timeFormatted = pack . formatTime defaultTimeLocale "%F %H:%M:%S%4QZ"
+
+humanFormatter
+  :: forall a m .
+     MonadIO m
+  => LogFormatting a
+  => Bool
+  -> Maybe Text
+  -> Trace m FormattedMessage
+  -> m (Trace m a)
+humanFormatter withColor condApplication tr = do
+    let tr' = humanFormatter' withColor condApplication tr
+    preFormatted [Stdout HumanFormatColoured] tr'
+
+machineFormatter
+  :: forall a m .
+     MonadIO m
+  => LogFormatting a
+  => Maybe Text
+  -> Trace m FormattedMessage
+  -> m (Trace m a)
+machineFormatter condApplication tr = do
+    let tr' = machineFormatter' condApplication tr
+    preFormatted [Stdout MachineFormat] tr'
+
+forwardFormatter
+  :: forall a m .
+     MonadIO m
+  => LogFormatting a
+  => Maybe Text
+  -> Trace m FormattedMessage
+  -> m (Trace m a)
+forwardFormatter condApplication tr = do
+    let tr' = forwardFormatter' condApplication tr
+    preFormatted [Stdout MachineFormat, Stdout HumanFormatColoured] tr'
