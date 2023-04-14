@@ -28,6 +28,8 @@ endef
 endif
 endef
 
+WB_PROFILING_MODE ?= time
+
 define define_profile_targets
 ID ?= $(shell git symbolic-ref HEAD | sed 's_/_\n_g' | tail -n1)
 ##                                           defining this target       profname  nix   dev   auto  stay profiled  backend
