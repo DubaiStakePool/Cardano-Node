@@ -65,6 +65,9 @@ module Gen.Cardano.Api.Typed
   , genQuantity
   , genPolicyId
   , genTxMetadata
+
+  -- Exported for my custom release
+  , genTxOutValueMa
   ) where
 
 import           Cardano.Api hiding (txIns)
