@@ -28,7 +28,7 @@ endef
 endif
 endef
 
-WB_PROFILING_MODE ?= time
+WB_PROFILING ?= none
 
 define define_profile_targets
 ID ?= $(shell git symbolic-ref HEAD | sed 's_/_\n_g' | tail -n1)
