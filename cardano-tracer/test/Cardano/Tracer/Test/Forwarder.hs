@@ -259,7 +259,7 @@ traceObjectsWriter sink = forever $ do
  where
   mkTraceObject now = TraceObject
     { toHuman     = Just "Human Message for testing if our mechanism works as we expect"
-    , toMachine   = Just "{\"msg\": \"Very big message forMachine because we have to check if it works\"}"
+    , toMachine   = "{\"msg\": \"Very big message forMachine because we have to check if it works\"}"
     , toNamespace = ["demoNamespace"]
     , toSeverity  = Info
     , toDetails   = DNormal
