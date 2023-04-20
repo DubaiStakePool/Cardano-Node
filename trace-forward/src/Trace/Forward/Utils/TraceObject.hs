@@ -125,7 +125,7 @@ readFromSink sink@ForwardSink{forwardQueue, wasUsed} =
               objs <- atomically $ do
                 queue <- readTVar forwardQueue
                 res <- getNTraceObjectsBlocking n queue >>= \case
-                  []     -> error "impossible"
+                  []     -> error "TraceObject>>readFromSink:impossible"
                   (x:xs) -> return $ x NE.:| xs
                 modifyTVar' wasUsed . const $ True
                 pure res
@@ -162,7 +162,7 @@ getNTraceObjectsBlocking
 getNTraceObjectsBlocking 0 _ = return []
 getNTraceObjectsBlocking n q = do
     lo <- readTBQueue q
-    (lo :) <$> getNTraceObjectsNonBlocking (n - 1) q
+    (lo :) <$> getNTraceObjectsBlocking (n - 1) q
 
 getTraceObjectsFromReply
   :: BlockingReplyList blocking lo -- ^ The reply with list of 'TraceObject's.
