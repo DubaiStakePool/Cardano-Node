@@ -21,9 +21,8 @@ import qualified Data.Aeson as AE
 import qualified Data.Aeson.Encoding as AE
 import qualified Data.ByteString.Lazy as BS
 import           Data.Functor.Contravariant
-import           Data.List (intersperse)
 import           Data.Maybe (fromMaybe)
-import           Data.Text (Text, pack, stripPrefix)
+import           Data.Text (Text, pack, stripPrefix, intercalate)
 import           Data.Text.Encoding (decodeUtf8)
 import           Data.Text.Lazy (toStrict)
 import           Data.Text.Lazy.Builder as TB
@@ -105,15 +104,13 @@ forwardFormatter' condApplication (Trace tr) = Trace $
   contramap
     (\ case
       (lc, Right v) ->
-            let ns' = case condApplication of
+            let ns' = intercalate "."
+                        (case condApplication of
                                   Just app -> app : pfNamespace v
-                                  Nothing -> pfNamespace v
-                ns'' = mconcat (intersperse (singleton '.')
-                                    (map fromText ns'))
-                nsText = toStrict (toLazyText ns'')
+                                  Nothing -> pfNamespace v)
                 machineObj = AE.pairs $
                                   "at"       .= pfTimestamp v
-                                <> "ns"      .= nsText
+                                <> "ns"      .= ns'
                                 <> "data"    .= pfForMachine v
                                 <> "sev"     .= fromMaybe Info (lcSeverity lc)
                                 <> "thread"  .= pfThreadId v
@@ -124,7 +121,7 @@ forwardFormatter' condApplication (Trace tr) = Trace $
                 to = TraceObject {
                     toHuman     = pfForHuman v
                   , toMachine   = forMachine'
-                  , toNamespace = ns'
+                  , toNamespace = pfNamespace v
                   , toSeverity  = fromMaybe Info (lcSeverity lc)
                   , toDetails   = fromMaybe DNormal (lcDetails lc)
                   , toTimestamp = pfTime v
@@ -150,15 +147,13 @@ machineFormatter' condApplication (Trace tr) = Trace $
   contramap
     (\ case
       (lc, Right v) ->
-            let ns' = case condApplication of
+            let ns' = intercalate "."
+                        (case condApplication of
                                   Just app -> app : pfNamespace v
-                                  Nothing -> pfNamespace v
-                ns'' = mconcat (intersperse (singleton '.')
-                                    (map fromText ns'))
-                nsText = toStrict (toLazyText ns'')
+                                  Nothing -> pfNamespace v)
                 machineObj = AE.pairs $
                                   "at"       .= pfTimestamp v
-                                <> "ns"      .= nsText
+                                <> "ns"      .= ns'
                                 <> "data"    .= pfForMachine v
                                 <> "sev"     .= fromMaybe Info (lcSeverity lc)
                                 <> "thread"  .= pfThreadId v
@@ -187,18 +182,17 @@ humanFormatter' withColor condApplication (Trace tr) =
       contramap
         (\ case
           (lc, Right v) ->
-              let ns' = case condApplication of
-                                    Just app -> app : pfNamespace v
-                                    Nothing -> pfNamespace v
-                  ns'' = mconcat (intersperse (singleton '.')
-                                      (map fromText ns'))
+              let ns' = intercalate "."
+                        (case condApplication of
+                                  Just app -> app : pfNamespace v
+                                  Nothing -> pfNamespace v)
                   severity' = fromMaybe Info (lcSeverity lc)
                   ns       = colorBySeverity
                                 withColor
                                 severity'
                                 $ fromString (pfHostname v)
                                   <> singleton ':'
-                                  <> ns''
+                                  <> fromText ns'
                   tadd     = fromText " ("
                               <> fromString (show severity')
                               <> singleton ','
