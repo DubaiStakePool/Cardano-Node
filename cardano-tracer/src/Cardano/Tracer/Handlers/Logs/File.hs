@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Tracer.Handlers.Logs.File
@@ -9,7 +10,7 @@ import           Control.Concurrent.Extra (Lock, withLock)
 import           Control.Monad (unless)
 import           Control.Monad.Extra (ifM)
 import qualified Data.ByteString as BS
-import           Data.Maybe (mapMaybe)
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import           System.Directory (createDirectoryIfMissing, doesDirectoryExist, makeAbsolute)
@@ -21,7 +22,7 @@ import           Cardano.Logging (TraceObject (..))
 import           Cardano.Tracer.Configuration
 import           Cardano.Tracer.Handlers.Logs.Utils
 import           Cardano.Tracer.Types
-import           Cardano.Tracer.Utils
+import           Cardano.Tracer.Utils (nl)
 
 -- | Append the list of 'TraceObject's to the latest log via symbolic link.
 --
@@ -39,12 +40,12 @@ writeTraceObjectsToFile
 writeTraceObjectsToFile nodeName currentLogLock rootDir format traceObjects = do
   rootDirAbs <- makeAbsolute rootDir
   let converter = case format of
-                    ForHuman   -> traceObjectToText
-                    ForMachine -> traceObjectToJSON
-  let itemsToWrite = mapMaybe converter traceObjects
+                    ForHuman   -> traceTextForHuman
+                    ForMachine -> traceTextForMachine
+  let itemsToWrite = map converter traceObjects
   unless (null itemsToWrite) $ do
     pathToCurrentLog <- getPathToCurrentlog nodeName rootDirAbs format
-    let preparedLine = TE.encodeUtf8 $ T.concat itemsToWrite
+    let preparedLine = TE.encodeUtf8 $ T.append nl (T.intercalate nl itemsToWrite)
     withLock currentLogLock $
       BS.appendFile pathToCurrentLog preparedLine
 
@@ -83,13 +84,10 @@ getPathToCurrentlog nodeName rootDirAbs format =
     createDirectoryIfMissing True subDirForLogs
     createEmptyLog subDirForLogs format
 
-traceObjectToText :: TraceObject -> Maybe T.Text
-traceObjectToText TraceObject{toHuman} =
-  case toHuman of
-    Nothing -> Nothing
-    Just msgForHuman -> Just $ msgForHuman <> nl
+traceTextForHuman :: TraceObject -> T.Text
+traceTextForHuman TraceObject{toHuman, toMachine} =
+    fromMaybe toMachine toHuman
 
-traceObjectToJSON :: TraceObject -> Maybe T.Text
-traceObjectToJSON TraceObject{toMachine} =
-  Just $ toMachine <> nl
+traceTextForMachine :: TraceObject -> T.Text
+traceTextForMachine TraceObject{toMachine} = toMachine
 
