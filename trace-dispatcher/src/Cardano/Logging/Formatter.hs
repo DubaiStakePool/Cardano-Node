@@ -77,7 +77,9 @@ preFormatted backends' (Trace tr) = do
             condForHuman = if elem (Stdout HumanFormatUncoloured) backends'
                           || elem (Stdout HumanFormatColoured) backends'
                           || elem Forwarder backends'
-                          then Just $ forHuman msg
+                          then case forHuman msg of
+                                  "" -> Nothing
+                                  txt -> Just txt
                           else Nothing
             machineFormatted = forMachine details msg
         T.traceWith tr (lc, Right (PreFormatted

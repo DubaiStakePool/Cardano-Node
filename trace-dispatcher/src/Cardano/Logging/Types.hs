@@ -58,7 +58,6 @@ import           Codec.Serialise (Serialise (..))
 import qualified Control.Tracer as T
 import           Data.Aeson ((.=))
 import qualified Data.Aeson as AE
-import qualified Data.Aeson.Text as AE
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.HashMap.Strict as HM
@@ -71,7 +70,6 @@ import           Data.Time (UTCTime)
 
 
 import           Data.Text (Text, intercalate, pack, singleton, unpack)
-import           Data.Text.Lazy (toStrict)
 import           GHC.Generics
 import           Network.HostName (HostName)
 
@@ -149,7 +147,7 @@ class LogFormatting a where
   -- No human representation is represented by the empty text
   -- The default implementation returns no human representation
   forHuman :: a -> Text
-  forHuman v = toStrict (AE.encodeToLazyText (forMachine DNormal v))
+  forHuman _v = ""
 
   -- | Metrics representation.
   -- No metrics by default
