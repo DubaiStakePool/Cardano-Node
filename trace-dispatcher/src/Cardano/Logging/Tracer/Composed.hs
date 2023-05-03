@@ -1,5 +1,6 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {- HLINT ignore "Monad law, left identity" -}
 
@@ -17,12 +18,12 @@ import           Cardano.Logging.TraceDispatcherMessage
 import           Cardano.Logging.Types
 
 
-import           Data.Maybe (fromMaybe)
-import           Data.Text hiding (map)
 import qualified Control.Tracer as NT
-import qualified Data.List as L
-import qualified Data.Set as Set
 import           Data.IORef
+import qualified Data.List as L
+import           Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
+import           Data.Text hiding (map)
 
 
 traceTracerInfo ::
@@ -80,18 +81,19 @@ mkCardanoTracer' :: forall evt evt1.
   -> IO (Trace IO evt)
 mkCardanoTracer' trStdout trForward mbTrEkg tracerPrefix hook = do
 
-    internalTr <- fmap (appendPrefixNames ["Reflection"])
+    ! internalTr <- fmap (appendPrefixNames ["Reflection"])
                        (withBackendsFromConfig (backendsAndFormat trStdout trForward))
 
     -- handle the messages
-    messageTrace <- withBackendsFromConfig (backendsAndFormat trStdout trForward)
+    ! messageTrace <- withBackendsFromConfig (backendsAndFormat trStdout trForward)
                     >>= withLimitersFromConfig internalTr
                     >>= addContextAndFilter internalTr
                     >>= maybeSilent isSilentTracer tracerPrefix False
                     >>= hook
 
+
     -- handle the metrics
-    metricsTrace <- (maybeSilent hasNoMetrics tracerPrefix True
+    ! metricsTrace <- (maybeSilent hasNoMetrics tracerPrefix True
                         . filterTrace (\ (_, v) -> not (Prelude.null (asMetrics v))))
                         (case mbTrEkg of
                             Nothing -> Trace NT.nullTracer

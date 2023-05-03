@@ -118,8 +118,8 @@ forwardFormatter' condApplication (Trace tr) = Trace $
                                 <> "thread"  .= pfThreadId v
                                 <> "host"    .= pfHostname v
                 forMachine' = decodeUtf8
-                              $ BS.toStrict
-                                $ AE.encodingToLazyByteString machineObj
+                                $ BS.toStrict
+                                   $ AE.encodingToLazyByteString machineObj
                 to = TraceObject {
                     toHuman     = pfForHuman v
                   , toMachine   = forMachine'
@@ -161,8 +161,8 @@ machineFormatter' condApplication (Trace tr) = Trace $
                                 <> "thread"  .= pfThreadId v
                                 <> "host"    .= pfHostname v
                 forMachine' = decodeUtf8
-                               $ BS.toStrict
-                                 $ AE.encodingToLazyByteString machineObj
+                                 $ BS.toStrict
+                                   $ AE.encodingToLazyByteString machineObj
             in (lc, Right (FormattedMachine forMachine'))
       (lc, Left ctrl) ->
         (lc { lcNSPrefix = case condApplication of
@@ -204,7 +204,7 @@ humanFormatter' withColor condApplication (Trace tr) =
                                 (decodeUtf8
                                   $ BS.toStrict
                                     $ AE.encodingToLazyByteString
-                                        $ AE.pairs ("data"    .= pfForMachine v))
+                                        $ AE.pairs ("data" .= pfForMachine v))
                                 (pfForHuman v)
                   forHuman'' = toStrict
                                 $ toLazyText
