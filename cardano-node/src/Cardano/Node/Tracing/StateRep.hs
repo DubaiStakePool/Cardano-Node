@@ -119,19 +119,19 @@ deriving instance (NFData NodeState)
 instance LogFormatting NodeState where
   forMachine _ = \case
     NodeOpeningDbs x -> mconcat
-      ["openingDb" .= toJSON x]
+      [ "kind" .= String "NodeOpeningDbs",         "openingDb" .= toJSON x]
     NodeReplays x -> mconcat
-      ["replays"   .= toJSON x]
+      [ "kind" .= String "NodeReplays",            "replays"   .= toJSON x]
     NodeInitChainSelection x -> mconcat
-      ["chainSel"  .= toJSON x]
+      [ "kind" .= String "NodeInitChainSelection", "chainSel"  .= toJSON x]
     NodeKernelOnline -> mconcat
-      []
+      [ "kind" .= String "NodeInitChainSelection"]
     NodeAddBlock x -> mconcat
-      ["addBlock"  .= toJSON x]
+      [ "kind" .= String "NodeAddBlock",           "addBlock"  .= toJSON x]
     NodeStartup x -> mconcat
-      ["startup"   .= toJSON x]
+      [ "kind" .= String "NodeStartup",            "startup"   .= toJSON x]
     NodeShutdown x -> mconcat
-      ["shutdown"  .= toJSON x]
+      [ "kind" .= String "NodeShutdown",           "shutdown"  .= toJSON x]
     _ -> mempty
 
 instance MetaTrace NodeState where
