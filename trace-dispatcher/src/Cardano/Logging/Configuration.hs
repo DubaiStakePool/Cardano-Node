@@ -77,7 +77,7 @@ maybeSilent :: forall m a. (MonadIO m) =>
   -> Bool
   -> Trace m a
   -> m (Trace m a)
-maybeSilent selectorFunc prefixNames isMetrics tr = do
+maybeSilent selectorFunc prefixNames isMetrics (Trace tr) = do
     ref  <- liftIO (newIORef Nothing)
     pure $ Trace $ T.arrow $ T.emit $ mkTrace ref
   where
@@ -85,7 +85,7 @@ maybeSilent selectorFunc prefixNames isMetrics tr = do
       silence <- liftIO $ readIORef ref
       if silence == Just True
         then pure ()
-        else T.traceWith (unpackTrace tr) (lc, Right a)
+        else T.traceWith tr (lc, Right a)
     mkTrace ref (lc, Left (Config c)) = do
       silence <- liftIO $ readIORef ref
       case silence of
@@ -93,10 +93,10 @@ maybeSilent selectorFunc prefixNames isMetrics tr = do
           let val = selectorFunc c (Namespace prefixNames [] :: Namespace a)
           liftIO $ writeIORef ref (Just val)
         Just _ -> pure ()
-      T.traceWith (unpackTrace tr) (lc,  Left (Config c))
+      T.traceWith tr (lc,  Left (Config c))
     mkTrace ref (lc, Left Reset) = do
       liftIO $ writeIORef ref Nothing
-      T.traceWith (unpackTrace tr) (lc,  Left Reset)
+      T.traceWith tr (lc,  Left Reset)
     mkTrace ref (lc, Left (Optimize s1 s2)) = do
       silence <- liftIO $ readIORef ref
       case silence of
@@ -104,14 +104,12 @@ maybeSilent selectorFunc prefixNames isMetrics tr = do
                                 then modifyIORef s2 (Set.insert prefixNames)
                                 else modifyIORef s1 (Set.insert prefixNames)
         _         -> pure ()
-      T.traceWith (unpackTrace tr) (lc,  Left (Optimize s1 s2))
+      T.traceWith tr (lc,  Left (Optimize s1 s2))
     mkTrace ref (lc, Left c@TCDocument {}) = do
       silence <- liftIO $ readIORef ref
       unless isMetrics
         (addSilent c silence)
-      T.traceWith (unpackTrace tr) (lc,  Left c)
-    -- mkTrace _ref (lc, Left other) =
-    --   T.traceWith (unpackTrace tr) (lc,  Left other)
+      T.traceWith tr (lc,  Left c)
 
 -- When all messages are filtered out, it is silent
 isSilentTracer :: forall a. MetaTrace a => TraceConfig -> Namespace a -> Bool
