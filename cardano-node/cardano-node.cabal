@@ -38,6 +38,7 @@ common project-config
                         -Wpartial-fields
                         -Wredundant-constraints
                         -Wunused-packages
+                        -fprof-auto
 
 common maybe-Win32
   if os(windows)
