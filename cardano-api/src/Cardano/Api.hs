@@ -478,7 +478,6 @@ module Cardano.Api (
     ExecutionUnits(..),
     ExecutionUnitPrices(..),
     CostModel(..),
-    InvalidCostModel(..),
     toAlonzoCostModel,
     fromAlonzoCostModel,
 
@@ -782,6 +781,7 @@ module Cardano.Api (
     BundledProtocolParameters(..),
     bundleProtocolParams,
     unbundleProtocolParams,
+    ProtocolParametersConversionError(..),
 
     -- ** Conversions
     toLedgerPParams,

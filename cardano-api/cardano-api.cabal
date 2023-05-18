@@ -273,6 +273,7 @@ test-suite cardano-api-golden
                       , cardano-crypto-class
                       , cardano-ledger-alonzo
                       , containers
+                      , hedgehog
                       , hedgehog-extras >= 0.4.3.0
                       , hspec
                       , hw-hspec-hedgehog
