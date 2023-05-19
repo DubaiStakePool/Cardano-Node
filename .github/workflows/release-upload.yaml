@@ -38,15 +38,10 @@ jobs:
       - ${{ matrix.platform == 'macos' && 'macOS' || 'Linux' }}
       - X64
     steps:
-      - name: Install Nix with good defaults
-        uses: cachix/install-nix-action@v20
-        with:
-          extra_nix_config: |
-            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-            substituters = https://cache.iog.io/ https://cache.nixos.org/
-          nix_path: nixpkgs=channel:nixos-unstable
       - name: Checkout repository
         uses: actions/checkout@v3
+      - name: Remove old artifacts
+        run: rm cardano-node-*
       # We copy the file out of `result/` as `upload-artifact` does
       # not like to upload files from links (complains that `result`
       # is not a directory).
@@ -67,6 +62,8 @@ jobs:
     needs: build
     runs-on: [self-hosted, Linux, X64]
     steps:
+      - name: Remove old artifacts
+        run: rm cardano-node-*
       - name: Download win64
         uses: actions/download-artifact@v3
         with:
