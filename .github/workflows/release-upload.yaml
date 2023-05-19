@@ -33,7 +33,7 @@ jobs:
           # - win64
           - macos
 
-    runs-on: [self-hosted, macOS, X64]
+    runs-on: [self-hosted, ${{ matrix.platform == 'macos' && 'macOS' || 'Linux' }}, X64]
     steps:
       - name: Install Nix with good defaults
         uses: cachix/install-nix-action@v20
@@ -62,7 +62,7 @@ jobs:
   upload:
     name: "Upload Assets"
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Download win64
         uses: actions/download-artifact@v3
