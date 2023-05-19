@@ -41,6 +41,8 @@ import           Cardano.Logging.Trace
 import           Cardano.Logging.TraceDispatcherMessage
 import           Cardano.Logging.Types
 
+import           Debug.Trace
+
 
 
 -- | Call this function at initialisation, and later for reconfiguration
@@ -51,11 +53,11 @@ configureTracers :: forall a m.
   -> TraceConfig
   -> [Trace m a]
   -> m ()
-configureTracers (ConfigReflection silent noMetrics) config tracers = do
+configureTracers cr config tracers = do
     mapM_ (\t -> do
             configureTrace Reset t
             configureAllTrace (Config config) t
-            configureTrace (Optimize silent noMetrics) t)
+            configureTrace (Optimize cr) t)
           tracers
   where
     configureTrace control (Trace tr) =
@@ -93,23 +95,25 @@ maybeSilent selectorFunc prefixNames isMetrics (Trace tr) = do
           let val = selectorFunc c (Namespace prefixNames [] :: Namespace a)
           liftIO $ writeIORef ref (Just val)
         Just _ -> pure ()
-      T.traceWith tr (lc,  Left (Config c))
+      T.traceWith tr (lc, Left (Config c))
     mkTrace ref (lc, Left Reset) = do
       liftIO $ writeIORef ref Nothing
       T.traceWith tr (lc,  Left Reset)
-    mkTrace ref (lc, Left (Optimize s1 s2)) = do
+    mkTrace ref (lc, Left (Optimize cr)) = do
       silence <- liftIO $ readIORef ref
       case silence of
         Just True -> liftIO $ if isMetrics
-                                then modifyIORef s2 (Set.insert prefixNames)
-                                else modifyIORef s1 (Set.insert prefixNames)
+                                then modifyIORef (crNoMetrics cr) (Set.insert prefixNames)
+                                else modifyIORef (crSilent cr) (Set.insert prefixNames)
         _         -> pure ()
-      T.traceWith tr (lc,  Left (Optimize s1 s2))
+      liftIO $ modifyIORef (crAllTracers cr) (Set.insert prefixNames)
+      T.traceWith tr (lc,  Left (Optimize cr))
     mkTrace ref (lc, Left c@TCDocument {}) = do
       silence <- liftIO $ readIORef ref
       unless isMetrics
         (addSilent c silence)
       T.traceWith tr (lc,  Left c)
+
 
 -- When all messages are filtered out, it is silent
 isSilentTracer :: forall a. MetaTrace a => TraceConfig -> Namespace a -> Bool
@@ -139,7 +143,7 @@ hasNoMetrics _tc _ns =
 -- | Take a selector function called 'extract'.
 -- Take a function from trace to trace with this config dependent value.
 -- In this way construct a trace transformer with a config value
-withNamespaceConfig :: forall m a b c. (MonadIO m, Ord b) =>
+withNamespaceConfig :: forall m a b c. (MonadIO m, Ord b, Show b) =>
      String
   -> (TraceConfig -> Namespace a -> m b)
   -> (Maybe b -> Trace m c -> m (Trace m a))
@@ -176,24 +180,23 @@ withNamespaceConfig name extract withConfig tr = do
       T.traceWith (unpackTrace tt) (lc, Left Reset)
 
     mkTrace ref (lc, Left (Config c)) = do
+      let nst = lcNSPrefix lc ++ lcNSInner lc
       !val <- extract c (Namespace (lcNSPrefix lc) (lcNSInner lc))
       eitherConf <- liftIO $ readIORef ref
-      let nst = lcNSPrefix lc ++ lcNSInner lc
       case eitherConf of
         Left (cmap, Nothing) ->
           case Map.lookup nst cmap of
             Nothing -> do
               liftIO
-                  $ writeIORef ref
-                               (Left (Map.insert nst val cmap, Nothing))
+                  $ writeIORef ref (Left (Map.insert nst val cmap, Nothing))
               Trace tt <- withConfig (Just val) tr
-              -- trace ("config dict " ++ show( Map.insert nst val cmap)) $
+              -- trace ("config dict " ++ show (Map.insert nst val cmap)) $
               T.traceWith tt (lc, Left (Config c))
             Just v  -> do
               if v == val
                 then do
                   Trace tt <- withConfig (Just val) tr
-                  -- trace "config val" $
+                  -- trace ("config val" ++ show val) $
                   T.traceWith tt (lc, Left (Config c))
                 else error $ "Inconsistent trace configuration with context "
                                   ++ show nst
@@ -202,19 +205,19 @@ withNamespaceConfig name extract withConfig tr = do
         Left (_cmap, Just _v) -> error $ "Trace not reset before reconfiguration (2)"
                             ++ show nst
 
-    mkTrace ref (lc, Left (Optimize r1 r2)) = do
+    mkTrace ref (lc, Left (Optimize cr)) = do
       eitherConf <- liftIO $ readIORef ref
       let nst = lcNSPrefix lc ++ lcNSInner lc
       case eitherConf of
         Left (cmap, Nothing) ->
           case nub (Map.elems cmap) of
-            []     -> -- trace ("optimize no value " ++ show lc) $
-                      pure ()
+            []     -> trace ("optimize no value " ++ show nst) $
+                        pure ()
             [val]  -> do
                         liftIO $ writeIORef ref $ Right val
                         Trace tt <- withConfig (Just val) tr
-                        -- trace ("optimize one value " ++ show lc ++ " val " ++ show val) $
-                        T.traceWith tt (lc, Left (Optimize r1 r2))
+                        trace ("optimize one value " ++ show nst ++ " val " ++ show val) $
+                          T.traceWith tt (lc, Left (Optimize cr))
             _      -> let decidingDict =
                             foldl
                               (\acc e -> Map.insertWith (+) e (1 :: Int) acc)
@@ -227,8 +230,8 @@ withNamespaceConfig name extract withConfig tr = do
                       in do
                         liftIO $ writeIORef ref (Left (newmap, Just mostCommon))
                         Trace tt <- withConfig Nothing tr
-                        -- trace ("optimize dict " ++ show lc ++ " dict " ++ show newmap ++ "common" ++ show mostCommon) $
-                        T.traceWith tt (lc, Left (Optimize r1 r2))
+                        trace ("optimize dict " ++ show nst ++ " dict " ++ show newmap ++ " common " ++ show mostCommon) $
+                          T.traceWith tt (lc, Left (Optimize cr))
         Right _val -> error $ "Trace not reset before reconfiguration (3)"
                             ++ show nst
         Left (_cmap, Just _v) ->

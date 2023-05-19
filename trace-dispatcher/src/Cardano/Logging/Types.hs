@@ -293,13 +293,18 @@ instance Show SeverityF where
 -- Configuration
 
 -- |
-data ConfigReflection = ConfigReflection (IORef (Set [Text])) (IORef (Set [Text]))
+data ConfigReflection = ConfigReflection {
+    crSilent          :: IORef (Set [Text])
+  , crNoMetrics       :: IORef (Set [Text])
+  , crAllTracers      :: IORef (Set [Text])
+  }
 
 emptyConfigReflection :: IO ConfigReflection
 emptyConfigReflection  = do
-    silence <- newIORef Set.empty
-    hasMetrics <- newIORef Set.empty
-    pure $ ConfigReflection silence hasMetrics
+    silence     <- newIORef Set.empty
+    hasMetrics  <- newIORef Set.empty
+    allTracers  <- newIORef Set.empty
+    pure $ ConfigReflection silence hasMetrics allTracers
 
 data FormattedMessage =
       FormattedHuman Bool Text
@@ -469,11 +474,10 @@ emptyTraceConfig = TraceConfig {
 -- entry points first, and then with Optimize. When reconfiguring it needs to
 -- run Reset followed by Config followed by Optimize
 data TraceControl where
-    Reset     :: TraceControl
-    Config    :: TraceConfig -> TraceControl
-    Optimize  :: IORef (Set [Text]) -> IORef (Set [Text]) -> TraceControl
-    TCDocument  :: Int  -> DocCollector -> TraceControl
-
+    Reset       :: TraceControl
+    Config      :: TraceConfig -> TraceControl
+    Optimize    :: ConfigReflection -> TraceControl
+    TCDocument  :: Int -> DocCollector -> TraceControl
 
 newtype DocCollector = DocCollector (IORef (Map Int LogDoc))
 

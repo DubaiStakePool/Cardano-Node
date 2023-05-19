@@ -30,9 +30,10 @@ data TraceDispatcherMessage =
     -- and gives the number of messages that has been suppressed
   | UnknownNamespace [Text] [Text] UnknownNamespaceKind
     -- ^ An internal error was detected
-  | TracerInfo [Text] [Text]
+  | TracerInfo [Text] [Text] [Text]
     -- ^  The first array signifies the namespace of silent tracers
     --    The second array signifies the namespace tracers without metrics
+    --    The third array gives the names of all tracers
   deriving Show
 
 instance LogFormatting TraceDispatcherMessage where
@@ -44,10 +45,11 @@ instance LogFormatting TraceDispatcherMessage where
   forHuman (UnknownNamespace nsUnknown nsLegal qk) = "Unknown namespace detected "
     <> intercalate (singleton '.') nsUnknown <> ". Used for querying " <> (pack . show) qk
     <> " a legal namespace would be " <> intercalate (singleton '.') nsLegal <> "."
-  forHuman (TracerInfo silent noMetrics) = "The tracing system has silent the following tracer,"
+  forHuman (TracerInfo silent noMetrics allTracers) = "The tracing system has silent the following tracer,"
     <> " as they will never have any output according to the current config: "
     <> intercalate (singleton ' ') silent <> ". The following tracers will not emit metrics "
-    <> intercalate (singleton ' ') noMetrics <> "."
+    <> intercalate (singleton ' ') noMetrics <> ". Here is a complete list of all tracers: "
+    <> intercalate (singleton ' ') allTracers <> "."
 
   forMachine _dtl StartLimiting {} = mconcat
         [ "kind" .= String "StartLimiting"
@@ -66,10 +68,11 @@ instance LogFormatting TraceDispatcherMessage where
         , "legalNamespace" .= String (intercalate (singleton '.') nsleg)
         , "querying" .= String ((pack . show) query)
         ]
-  forMachine _dtl (TracerInfo silent noMetrics) = mconcat
+  forMachine _dtl (TracerInfo silent noMetrics allTracers) = mconcat
         [ "kind" .= String "TracerMeta"
         , "silentTracers" .= String (intercalate (singleton ' ') silent)
         , "noMetrics" .= String (intercalate (singleton ' ') noMetrics)
+        , "allTracers" .= String (intercalate (singleton ' ') allTracers)
         ]
 
   asMetrics StartLimiting {} = []

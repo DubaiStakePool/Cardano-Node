@@ -152,20 +152,23 @@ traceTracerInfo ::
   -> Trace IO FormattedMessage
   -> ConfigReflection
   -> IO ()
-traceTracerInfo trStdout trForward (ConfigReflection silentRef metricsRef) = do
+traceTracerInfo trStdout trForward cr = do
     internalTr <- backendsAndFormat
                       trStdout
                       trForward
                       (Just [Forwarder, Stdout MachineFormat])
                       (Trace T.nullTracer)
-    silentSet <- readIORef silentRef
-    metricSet <- readIORef metricsRef
+    silentSet <- readIORef (crSilent cr)
+    metricSet <- readIORef (crNoMetrics cr)
+    allTracerSet <- readIORef (crAllTracers cr)
     let silentList  = map (intercalate (singleton '.')) (Set.toList silentSet)
     let metricsList = map (intercalate (singleton '.')) (Set.toList metricSet)
+    let allTracersList = map (intercalate (singleton '.')) (Set.toList allTracerSet)
     traceWith (withInnerNames (appendPrefixNames ["Reflection"] internalTr))
-              (TracerInfo silentList metricsList)
-    writeIORef silentRef Set.empty
-    writeIORef metricsRef Set.empty
+              (TracerInfo silentList metricsList allTracersList)
+    writeIORef (crSilent cr) Set.empty
+    writeIORef (crNoMetrics cr) Set.empty
+    writeIORef (crAllTracers cr) Set.empty
 
 -- A basic ttracer just for metrics
 mkMetricsTracer :: Maybe (Trace IO FormattedMessage) -> Trace IO FormattedMessage
