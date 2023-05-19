@@ -33,7 +33,7 @@ jobs:
           # - win64
           - macos
 
-    runs-on: ${{ matrix.platform == 'macos' && '[self-hosted, macOS, X64]' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.platform == 'macos' && [self-hosted, macOS, X64] || 'ubuntu-latest' }}
     steps:
       - name: Install Nix with good defaults
         uses: cachix/install-nix-action@v20
