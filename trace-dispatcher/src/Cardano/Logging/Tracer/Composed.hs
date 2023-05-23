@@ -88,11 +88,12 @@ mkCardanoTracer' trStdout trForward mbTrEkg tracerPrefix hook = do
     addContextAndFilter tr = do
       tr'  <- withDetailsFromConfig tr
       tr'' <- filterSeverityFromConfig tr'
-      pure $ withDetails
-            $ withSeverity
-              $ withPrivacy
-                $ withInnerNames
-                  $ appendPrefixNames tracerPrefix tr''
+      pure $ withInnerNames
+              $ appendPrefixNames tracerPrefix
+                $ withSeverity
+                  $ withPrivacy
+                    $ withDetails
+                      tr''
 
     traceNamespaceErrors ::
          Trace IO TraceDispatcherMessage
