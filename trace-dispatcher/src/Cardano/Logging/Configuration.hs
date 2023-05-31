@@ -41,9 +41,6 @@ import           Cardano.Logging.Trace
 import           Cardano.Logging.TraceDispatcherMessage
 import           Cardano.Logging.Types
 
-import           Debug.Trace
-
-
 
 -- | Call this function at initialisation, and later for reconfiguration
 configureTracers :: forall a m.
@@ -143,7 +140,7 @@ hasNoMetrics _tc _ns =
 -- | Take a selector function called 'extract'.
 -- Take a function from trace to trace with this config dependent value.
 -- In this way construct a trace transformer with a config value
-withNamespaceConfig :: forall m a b c. (MonadIO m, Ord b, Show b) =>
+withNamespaceConfig :: forall m a b c. (MonadIO m, Ord b) =>
      String
   -> (TraceConfig -> Namespace a -> m b)
   -> (Maybe b -> Trace m c -> m (Trace m a))
@@ -211,13 +208,13 @@ withNamespaceConfig name extract withConfig tr = do
       case eitherConf of
         Left (cmap, Nothing) ->
           case nub (Map.elems cmap) of
-            []     -> trace ("optimize no value " ++ show nst) $
-                        pure ()
+            []     -> -- trace ("optimize no value " ++ show nst) $
+                      pure ()
             [val]  -> do
                         liftIO $ writeIORef ref $ Right val
                         Trace tt <- withConfig (Just val) tr
-                        trace ("optimize one value " ++ show nst ++ " val " ++ show val) $
-                          T.traceWith tt (lc, Left (Optimize cr))
+                        -- trace ("optimize one value " ++ show nst ++ " val " ++ show val) $
+                        T.traceWith tt (lc, Left (Optimize cr))
             _      -> let decidingDict =
                             foldl
                               (\acc e -> Map.insertWith (+) e (1 :: Int) acc)
@@ -230,8 +227,8 @@ withNamespaceConfig name extract withConfig tr = do
                       in do
                         liftIO $ writeIORef ref (Left (newmap, Just mostCommon))
                         Trace tt <- withConfig Nothing tr
-                        trace ("optimize dict " ++ show nst ++ " dict " ++ show newmap ++ " common " ++ show mostCommon) $
-                          T.traceWith tt (lc, Left (Optimize cr))
+                        -- trace ("optimize dict " ++ show nst ++ " dict " ++ show newmap ++ " common " ++ show mostCommon) $
+                        T.traceWith tt (lc, Left (Optimize cr))
         Right _val -> error $ "Trace not reset before reconfiguration (3)"
                             ++ show nst
         Left (_cmap, Just _v) ->

@@ -82,9 +82,9 @@ import           Ouroboros.Consensus.Util.Enclose
 
 instance Show adr => LogFormatting (ConnectionId adr) where
   forMachine _dtal (ConnectionId local' remote) =
-    mconcat [ "connectionId" .= String ((Text.pack . show) local'
+    mconcat [ "connectionId" .= String (Text.pack $ show local'
                                           <> " "
-                                          <> (Text.pack . show) remote)
+                                          <> show remote)
     ]
 --------------------------------------------------------------------------------
 --   TraceLabelCreds peer a
