@@ -3,8 +3,8 @@
 Module      : Cardano.Benchmarking.Script.Action
 Description : Convert an 'Action' to a monadic 'ActionM'.
 
-This is just exporting 'action', and 'liftToAction' is tough
-to use because of the risk of circular imports.
+This is just exporting 'action' in order to avoid circular
+module dependencies.
 -}
 
 module Cardano.Benchmarking.Script.Action
