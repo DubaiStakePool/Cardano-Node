@@ -24,63 +24,57 @@ let
             "Stdout MachineFormat"
             "EKGBackend"
             ] ++ optional tracer
-              "Forwarder";
+                 "Forwarder";
         };
 
       ## These are comparision-specific config deviations from the default.
       ##
       ## "Resources".backends = ["EKGBackend"];
-      # "ChainDB".severity = "Info";
-      # "Forge.Loop".severity = "Info";
-      # "Net.ConnectionManager.Local".severity = "Info";
-      # "Net.ConnectionManager.Remote".severity = "Info";
-      # "Net.DNSResolver".severity = "Info";
-      # "Net.ErrorPolicy.Local".severity = "Info";
-      # "Net.ErrorPolicy.Remote".severity = "Info";
-      # "Net.InboundGovernor".severity = "Info";
-      # "Net.Net.AcceptPolicy".severity = "Info";
-      # "Net.Peers".severity = "Info";
-      # "Net.Peers.PublicRoot".severity = "Info";
-      # "Net.PeerSelection".severity = "Info";
-      # "Net.Server".severity = "Info";
-      # "Net.Subscription.DNS".severity = "Info";
-      # "Net.Subscription.IP".severity = "Info";
-      # "Net.Startup.DiffusionInit".severity = "Info";
 
-      "Mempool".severity = "Debug";
-      "TxSubmission.TxInbound".severity = "Debug";
-      "BlockFetch.Client".severity = "Debug";
-      "BlockFetch.Server".severity = "Debug";
-      "ChainSync.ServerHeader".severity = "Debug";
-      "ChainSync.Client".severity = "Debug";
+      "Net.AcceptPolicy".severity = "Info";
+      "BlockFetch.Client".severity = "Info";
+      "BlockFetch.Server".severity = "Info";
+      "ChainDB".severity = "Info";
+      "ChainSync.Client".severity = "Info";
+      "ChainSync.ServerBlock".severity = "Info";
+      "ChainSync.ServerHeader".severity = "Info";
+      "Forge.Loop".severity = "Info";
+      "Net.ConnectionManager".severity = "Info";
+      "Net.Startup.DiffusionInit".severity = "Info";
+      "Net.DNSResolver".severity = "Info";
+      "Net.ErrorPolicy".severity = "Info";
+      "Net.InboundGovernor".severity = "Info";
+      "Net.Subscription.DNS".severity = "Info";
+      "Net.Subscription.IP".severity = "Info";
+      "Net.Peers".severity = "Info";
+      "Net.PeerSelection".severity = "Info";
+      "Net.Server".severity = "Info";
+      "Mempool".severity = "Info";
+      "Resources".severity= "Info";
+      "TxSubmission.TxInbound".severity = "Info";
 
+      "ChainDB.FollowerEvent.NewFollower".severity = "Debug";
+      "ChainDB.FollowerEvent.FollowerNoLongerInMem".severity = "Debug";
+      "ChainDB.AddBlockEvent.AddedBlockToQueue".severity = "Debug";
+      "ChainDB.IteratorEvent.StreamFromVolatileDB".severity = "Debug";
+      "ChainDB.GCEvent.PerformedGC".severity = "Debug";
+      "ChainDB.GCEvent.ScheduledGC".severity = "Debug";
+      "ChainDB.ImmDbEvent.CacheEvent.CurrentChunkHit".severity = "Debug";
+      "ChainDB.ImmDbEvent.CacheEvent.PastChunkHit".severity = "Debug";
+      "Forge.Loop.BlockContext".severity = "Debug";
+      "Forge.Loop.LedgerState".severity = "Debug";
+      "Forge.Loop.LedgerView".severity = "Debug";
+      "Forge.Loop.ForgingMempoolSnapshot".severity = "Debug";
+      "Forge.Loop.ForgeTickedLedgerState".severity = "Debug";
+      "TxSubmission.TxInbound.CanRequestMoreTxs".severity = "Debug";
+      "TxSubmission.TxInbound.CannotRequestMoreTxs".severity = "Debug";
+      "TxSubmission.TxInbound.Collected".severity = "Debug";
+      "TxSubmission.TxInbound.Processed".severity = "Debug";
 
-
-      # "BlockFetch.Client.CompletedBlockFetch".severity = "Debug";
-      # "BlockFetch.Client.SendFetchRequest".severity = "Debug";
-      # "BlockFetch.Server.SendBlock".severity = "Debug";
-      # "ChainDB.AddBlockEvent.AddedToCurrentChain".severity = "Debug";
-      # "ChainDB.LedgerEvent.TookSnapshot".severity = "Debug";
-      # "ChainSync.Client.DownloadedHeader".severity = "Debug";
-      # "ChainSync.ServerHeader.Update".severity = "Debug";
-      # "Forge.Loop.AdoptedBlock".severity = "Debug";
-      # "Forge.Loop.BlockContext".severity = "Debug";
-      # "Forge.Loop.ForgedBlock".severity = "Debug";
-      # "Forge.Loop.LedgerState".severity = "Debug";
-      # "Forge.Loop.LedgerView".severity = "Debug";
-      # "Forge.Loop.MempoolSnapshot".severity = "Debug";
-      # "Forge.Loop.NodeIsLeader".severity = "Debug";
-      # "Forge.Loop.NodeNotLeader".severity = "Debug";
-      # "Forge.Loop.StartLeadershipCheck".severity = "Debug";
-      # "Forge.Loop.TickedLedgerState".severity = "Debug";
-      # "Mempool.AddedTx".severity = "Debug";
-      # "Mempool.RejectedTx".severity = "Debug";
-      # "Mempool.RemoveTxs".severity = "Debug";
-
-      # "TraceBenchTxSubServAck".severity = "Debug";
-      # "TraceBenchTxSubSummary".severity = "Debug";
-      # "TraceTxSubmissionCollected".severity = "Debug";
-      # "TraceTxSubmissionProcessed".severity = "Debug";
+      "TraceBenchTxSubServAck".severity = "Debug";
+      "TraceBenchTxSubSummary".severity = "Debug";
+      "TraceTxSubmissionCollected".severity = "Debug";
+      "TraceTxSubmissionProcessed".severity = "Debug";
     };
   };
 
