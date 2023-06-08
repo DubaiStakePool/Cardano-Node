@@ -278,7 +278,7 @@ backend_nomadcloud() {
           ## Optimistic: 1,396 MiB / 15,545 MiB Total
           local resources='{
               "cores":      8
-            , "memory":     12000
+            , "memory":     13000
             , "memory_max": 15000
           }'
             jq \
@@ -287,14 +287,30 @@ backend_nomadcloud() {
               "${dir}"/nomad/nomad-job.json \
           | \
             sponge "${dir}"/nomad/nomad-job.json
-          # Fix for region mismatches
-          ###########################
-          # There are USx16 and APx18 and we need USx17 and APx17
+          # The explorer node:
+          ## - cpu.reservablecores  = 16
+          ## - cpu.arch             = amd64
+          ## - cpu.frequency        = 3400
+          ## - cpu.modelname        = Intel(R) Xeon(R) Platinum 8275CL CPU @ 3.00GHz
+          ## - cpu.numcores         = 16
+          ## - cpu.reservablecores  = 16
+          ## - cpu.totalcompute     = 54400
+          ## - memory.totalbytes    = 32839827456
+          # Node ID: 84970126-b504-12a9-fc3a-f4ddd274a142
+          # client named "ip-10-24-153-59.eu-central-1.compute.internal"
+          local explorer_resources='{
+              "cores":      16
+            , "memory":     29000
+            , "memory_max": 31000
+          }'
             jq \
-              ".[\"job\"][\"${nomad_job_name}\"][\"group\"][\"node-49\"][\"affinity\"][\"value\"] = \"ap-southeast-2\"" \
+              --argjson resources "${explorer_resources}" \
+              ".[\"job\"][\"${nomad_job_name}\"][\"group\"][\"explorer\"][\"task\"] |= with_entries( .value.resources = \$resources )" \
               "${dir}"/nomad/nomad-job.json \
           | \
             sponge "${dir}"/nomad/nomad-job.json
+          # Fix for region mismatches
+          ###########################
           # We use "us-east-2" and they use "us-east-1"
             jq \
               ".[\"job\"][\"${nomad_job_name}\"][\"datacenters\"] |= [\"eu-central-1\", \"us-east-1\", \"ap-southeast-2\"]" \
