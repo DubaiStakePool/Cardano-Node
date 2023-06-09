@@ -2487,6 +2487,7 @@ backend_nomad() {
               -o -name "*.eventlog"                      \
               -o -name "*.gcstats"                       \
               -o -name "*.log"                           \
+              -o -name "start.sh.debug"                  \
             \)                                           \
             -printf \"%P\\n\"                            \
         |                                                \
